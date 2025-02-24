@@ -51,6 +51,7 @@ This program generates fake Spotify streaming data in JSON format, which you can
 ### Features
 
 - **Simulate Streams**: Generate fake streaming data for any track.
+- **Bulk Mode**: Process multiple tracks from a bulk.txt file.
 - **Max Streaming Density**: Option to generate **389,306 streams** for maximum density.
 - **Customizable Output**: Optionally customize the output file name.
 - **Flexible Input**: Accepts Spotify IDs or links.
