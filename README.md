@@ -1,3 +1,5 @@
+---
+
 # Stats.fm Booster
 
 A simple Go program to generate mock Spotify streaming data for importing into StatsFM. Simulate streams for your favorite tracks.
@@ -23,60 +25,60 @@ This program generates fake Spotify streaming data in JSON format, which you can
    ```bash
    git clone https://github.com/ProbTom/stats.fm-booster
    cd stats.fm-booster
-   
-Run the Program:
-```go run stats.go```
-Follow the Prompts:
+   ```
 
-Enter a Spotify track.
+2. **Run the Program**:
+   ```bash
+   go run stats.go
+   ```
 
-Specify the total number of streams.
+3. **Follow the Prompts**:
+   - Enter a Spotify track ID or link.
+   - Choose whether to maximize streaming density (389,306 streams) or specify a custom number of streams.
+   - If not maximizing density:
+     - Enter the total number of streams.
+     - Specify a start date and end date for the streams.
+   - Choose whether to customize the output file name (optional).
 
-Enter a start date and end date for the streams.
-
-Choose whether to customize the output file name (optional).
-
-After running the program, a JSON file (e.g., output.json) will be created in the same folder.
-
-Go to [StatsFM Imports.](https://stats.fm/settings/imports)
-
-Drag and drop the generated JSON file into the import section.
-
-Wait for the data to appear on your profile (usually 1-3 minutes).
+4. **Import the Data**:
+   - After running the program, a JSON file (e.g., `output.json`) will be created in the same folder.
+   - Go to [StatsFM Imports](https://stats.fm/settings/imports).
+   - Drag and drop the generated JSON file into the import section.
+   - Wait for the data to appear on your profile (usually 2-5 minutes).
 
 ---
 
 ### Features
 
-Simulate Streams: Generate fake streaming data for any track.
-
-Customizable Output: Optionally customize the output file name.
-
-Flexible Input: Accepts Spotify IDs or links.
-
-Randomized Data: Streams are generated with random timestamps and playback durations.
+- **Simulate Streams**: Generate fake streaming data for any track.
+- **Max Streaming Density**: Option to generate **389,306 streams** for maximum density.
+- **Customizable Output**: Optionally customize the output file name.
+- **Flexible Input**: Accepts Spotify IDs or links.
+- **Randomized Data**: Streams are generated with random timestamps and playback durations (unless maximizing density).
 
 ---
 
-# Warnings
+## Warnings
 
-You can get banned if you use this excessively. StatsFM reserves the right to ban your account if they detect suspicious activity.
+- **You can get banned if you use this excessively**. StatsFM reserves the right to ban your account if they detect suspicious activity.
+- **You need Stats.fm Premium** to use the import feature.
+- This program is for educational purposes only. Use it at your own risk.
 
-You need stats.fm Premium.
-
-This program is for educational purposes only. Use it at your own risk.
 ---
 
-# Author
-# [Tom](https://github.com/ProbTom)
+## Author
 
-### Credits 
+### [Tom](https://github.com/ProbTom)
+
+---
+
+## Credits
+
 ### [scoobyluvs](https://github.com/scoobyluvs/StatsFM-Cheat/)
 
 ---
 
-### Contact
+## Contact
 
-[Discord](https://discord.com/users/229396464848076800)
-
-Telegram [@ProbTom](https://t.me/ProbTom) 
+- [Discord](https://discord.com/users/229396464848076800)
+- Telegram [@ProbTom](https://t.me/ProbTom)
