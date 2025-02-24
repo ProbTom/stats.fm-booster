@@ -196,7 +196,24 @@ func main() {
 			panic(err)
 		}
 
-		filename := fmt.Sprintf("output_%s.json", sanitizeFilename(trackID))
+		var filename string
+		if bulkMode == "Y" {
+			filename = fmt.Sprintf("output_%s.json", sanitizeFilename(trackID))
+		} else {
+			fmt.Print("Do you want to customize the file name? (Y/N): ")
+			scanner.Scan()
+			customNameChoice := strings.ToUpper(scanner.Text())
+			if customNameChoice == "Y" {
+				fmt.Print("Enter desired file name: ")
+				scanner.Scan()
+				customName := scanner.Text()
+				customName = sanitizeFilename(customName)
+				filename = customName + ".json"
+			} else {
+				filename = "output.json"
+			}
+		}
+
 		err = os.WriteFile(filename, outputFile, 0644)
 		if err != nil {
 			panic(err)
