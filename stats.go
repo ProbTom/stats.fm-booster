@@ -14,71 +14,35 @@ import (
 type Track struct {
 	ID       string
 	Name     string
-	Artist   string
-	Album    string
 	Duration int
 }
 
 const (
-	defaultArtist = "The Weeknd"
-	defaultAlbum  = "Hurry Up Tomorrow"
-	defaultTrack  = "Cry For Me"
+	defaultTrack = "Cry For Me"
 )
 
-var (
-	albumTracks = map[string][]Track{
-		"3OxfaVgvTxUTy7276t7SPU": {
-			{ID: "3AWDeHLc88XogCaCnZQLVI", Name: "Cry For Me", Artist: "The Weeknd", Album: "Hurry Up Tomorrow", Duration: 200000},
-			{ID: "4sWQbsLLH2NEbO79DSZCL9", Name: "Big Sleep", Artist: "The Weeknd", Album: "Hurry Up Tomorrow", Duration: 228000},
-		},
-	}
-
-	artistTracks = map[string][]Track{
-		"1Xyo4u8uXC1ZmMpatF05PJ": {},
-	}
-)
-
-func extractID(input string) (string, string) {
+func extractTrackID(input string) string {
 	if strings.Contains(input, "open.spotify.com") {
 		trackIndex := strings.Index(input, "track/")
-		albumIndex := strings.Index(input, "album/")
-		artistIndex := strings.Index(input, "artist/")
-
-		var typePrefix string
-		var idStart int
-		switch {
-		case trackIndex != -1:
-			typePrefix = "track"
-			idStart = trackIndex + len("track/")
-		case albumIndex != -1:
-			typePrefix = "album"
-			idStart = albumIndex + len("album/")
-		case artistIndex != -1:
-			typePrefix = "artist"
-			idStart = artistIndex + len("artist/")
-		default:
-			return "", ""
+		if trackIndex == -1 {
+			return ""
 		}
-
+		idStart := trackIndex + len("track/")
 		idEnd := strings.Index(input[idStart:], "?")
 		if idEnd == -1 {
-			idEnd = len(input)
-		} else {
-			idEnd += idStart
+			return input[idStart:]
 		}
-		id := input[idStart:idEnd]
-
-		return typePrefix, id
+		return input[idStart : idStart+idEnd]
 	}
 
 	if strings.Contains(input, "/") {
 		parts := strings.Split(input, "/")
 		if len(parts) == 2 {
-			return parts[0], parts[1]
+			return parts[1]
 		}
 	}
 
-	return "track", input
+	return input
 }
 
 func addMilliseconds(ts string, msPlayed int) string {
@@ -94,34 +58,6 @@ func getRandomYear(minYear, maxYear int) int {
 	return rand.Intn(maxYear-minYear+1) + minYear
 }
 
-func getRandomTrackFromAlbum(albumID string) Track {
-	tracks, exists := albumTracks[albumID]
-	if !exists || len(tracks) == 0 {
-		return Track{
-			ID:       "defaultTrackID",
-			Name:     defaultTrack,
-			Artist:   defaultArtist,
-			Album:    defaultAlbum,
-			Duration: 200000,
-		}
-	}
-	return tracks[rand.Intn(len(tracks))]
-}
-
-func getRandomTrackFromArtist(artistID string) Track {
-	tracks, exists := artistTracks[artistID]
-	if !exists || len(tracks) == 0 {
-		return Track{
-			ID:       "defaultTrackID",
-			Name:     defaultTrack,
-			Artist:   defaultArtist,
-			Album:    defaultAlbum,
-			Duration: 200000,
-		}
-	}
-	return tracks[rand.Intn(len(tracks))]
-}
-
 func sanitizeFilename(name string) string {
 	if dotIndex := strings.Index(name, "."); dotIndex != -1 {
 		name = name[:dotIndex] // Remove everything after the dot
@@ -134,33 +70,20 @@ func main() {
 	rand.Seed(time.Now().UnixNano())
 
 	scanner := bufio.NewScanner(os.Stdin)
-	fmt.Print("Enter Track/Album/Artist: ")
+	fmt.Print("Enter Track ID or Link: ")
 	scanner.Scan()
 	input := scanner.Text()
 
-	inputType, id := extractID(input)
-	if inputType == "" || id == "" {
-		fmt.Println("Invalid input. Please use a valid Spotify link or ID.")
+	trackID := extractTrackID(input)
+	if trackID == "" {
+		fmt.Println("Invalid input. Please use a valid Spotify track link or ID.")
 		return
 	}
 
-	var selectedTrack Track
-	switch inputType {
-	case "track":
-		selectedTrack = Track{
-			ID:       id,
-			Name:     defaultTrack,
-			Artist:   defaultArtist,
-			Album:    defaultAlbum,
-			Duration: 200000,
-		}
-	case "album":
-		selectedTrack = getRandomTrackFromAlbum(id)
-	case "artist":
-		selectedTrack = getRandomTrackFromArtist(id)
-	default:
-		fmt.Println("Invalid input type. Please use track/, album/, or artist/.")
-		return
+	selectedTrack := Track{
+		ID:       trackID,
+		Name:     defaultTrack,
+		Duration: 200000,
 	}
 
 	fmt.Print("Enter total number of streams: ")
@@ -198,8 +121,6 @@ func main() {
 			"ts":                                currentTS,
 			"ms_played":                         msPlayed,
 			"master_metadata_track_name":        selectedTrack.Name,
-			"master_metadata_album_artist_name": selectedTrack.Artist,
-			"master_metadata_album_album_name":  selectedTrack.Album,
 			"spotify_track_uri":                 "spotify:track:" + selectedTrack.ID,
 		}
 
@@ -212,15 +133,15 @@ func main() {
 		panic(err)
 	}
 
-	fmt.Print("Do you want to customize the file name? (1 Yes - 0 No): ")
+	fmt.Print("Do you want to customize the file name? (Y/N): ")
 	scanner.Scan()
-	customNameChoice, err := strconv.Atoi(scanner.Text())
-	if err != nil || customNameChoice != 1 {
-		customNameChoice = 0
+	customNameChoice := strings.ToUpper(scanner.Text())
+	if customNameChoice != "Y" {
+		customNameChoice = "N"
 	}
 
 	filename := "output.json"
-	if customNameChoice == 1 {
+	if customNameChoice == "Y" {
 		fmt.Print("Enter desired file name: ")
 		scanner.Scan()
 		customName := scanner.Text()
