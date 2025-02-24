@@ -18,7 +18,7 @@ type Track struct {
 }
 
 const (
-	defaultTrack = "https://github.com/probtom"
+	defaultTrack = "https://github.com/ProbTom"
 )
 
 func extractTrackID(input string) string {
@@ -70,23 +70,48 @@ func main() {
 	rand.Seed(time.Now().UnixNano())
 
 	scanner := bufio.NewScanner(os.Stdin)
-	fmt.Print("Enter Track ID or Link: ")
+
+	fmt.Print("Enable bulk mode? (Y/N): ")
 	scanner.Scan()
-	input := scanner.Text()
-
-	trackID := extractTrackID(input)
-	if trackID == "" {
-		fmt.Println("Invalid input. Please use a valid Spotify track link or ID.")
-		return
+	bulkMode := strings.ToUpper(scanner.Text())
+	if bulkMode != "Y" {
+		bulkMode = "N"
 	}
 
-	selectedTrack := Track{
-		ID:       trackID,
-		Name:     defaultTrack,
-		Duration: 200000,
+	var trackIDs []string
+	if bulkMode == "Y" {
+		file, err := os.Open("bulk.txt")
+		if err != nil {
+			fmt.Println("Error opening bulk.txt:", err)
+			return
+		}
+		defer file.Close()
+
+		bulkScanner := bufio.NewScanner(file)
+		for bulkScanner.Scan() {
+			trackID := extractTrackID(bulkScanner.Text())
+			if trackID != "" {
+				trackIDs = append(trackIDs, trackID)
+			}
+		}
+
+		if len(trackIDs) == 0 {
+			fmt.Println("No valid track IDs found in bulk.txt.")
+			return
+		}
+	} else {
+		fmt.Print("Enter Track ID or Link: ")
+		scanner.Scan()
+		input := scanner.Text()
+
+		trackID := extractTrackID(input)
+		if trackID == "" {
+			fmt.Println("Invalid input. Please use a valid Spotify track link or ID.")
+			return
+		}
+		trackIDs = append(trackIDs, trackID)
 	}
 
-	// New prompt for maximum streaming density
 	fmt.Print("Ignore dates for maximum streaming density? (Y/N): ")
 	scanner.Scan()
 	maxDensityChoice := strings.ToUpper(scanner.Text())
@@ -96,7 +121,7 @@ func main() {
 
 	var totalPlays int
 	if maxDensityChoice == "Y" {
-		totalPlays = 389306 // Hardcoded for maximum streaming density
+		totalPlays = 389306
 	} else {
 		fmt.Print("Enter total number of streams: ")
 		scanner.Scan()
@@ -125,68 +150,58 @@ func main() {
 			endYear = 2025
 		}
 	} else {
-		// If max density is enabled, use a fixed start date (e.g., 2023-01-21)
 		startYear = 2023
 		endYear = 2023
 	}
 
-	dataList := make([]map[string]interface{}, 0)
-	var currentTS string
-
-	if maxDensityChoice == "Y" {
-		// Use a fixed start timestamp for maximum streaming density
-		currentTS = "2023-01-21T00:00:00Z"
-	} else {
-		// Generate a random timestamp within the specified date range
-		currentTS = time.Date(getRandomYear(startYear, endYear), time.Month(rand.Intn(12)+1), rand.Intn(28)+1, rand.Intn(24), rand.Intn(60), rand.Intn(60), 0, time.UTC).Format("2006-01-02T15:04:05Z")
-	}
-
-	for i := 0; i < totalPlays; i++ {
-		msPlayed := selectedTrack.Duration // Use full track duration for maximum density
-		if maxDensityChoice == "N" {
-			msPlayed = rand.Intn(selectedTrack.Duration) // Random duration for non-max density
+	for _, trackID := range trackIDs {
+		selectedTrack := Track{
+			ID:       trackID,
+			Name:     defaultTrack,
+			Duration: 200000,
 		}
 
-		updatedTS := addMilliseconds(currentTS, msPlayed)
+		dataList := make([]map[string]interface{}, 0)
+		var currentTS string
 
-		streamData := map[string]interface{}{
-			"ts":                                currentTS,
-			"ms_played":                         msPlayed,
-			"master_metadata_track_name":        selectedTrack.Name,
-			"master_metadata_album_artist_name": "Artist Name",
-			"master_metadata_album_album_name":  "Album Name",
-			"spotify_track_uri":                 "spotify:track:" + selectedTrack.ID,
+		if maxDensityChoice == "Y" {
+			currentTS = "2023-01-21T00:00:00Z"
+		} else {
+			currentTS = time.Date(getRandomYear(startYear, endYear), time.Month(rand.Intn(12)+1), rand.Intn(28)+1, rand.Intn(24), rand.Intn(60), rand.Intn(60), 0, time.UTC).Format("2006-01-02T15:04:05Z")
 		}
 
-		dataList = append(dataList, streamData)
-		currentTS = updatedTS
-	}
+		for i := 0; i < totalPlays; i++ {
+			msPlayed := selectedTrack.Duration
+			if maxDensityChoice == "N" {
+				msPlayed = rand.Intn(selectedTrack.Duration)
+			}
 
-	outputFile, err := json.MarshalIndent(dataList, "", "    ")
-	if err != nil {
-		panic(err)
-	}
+			updatedTS := addMilliseconds(currentTS, msPlayed)
 
-	fmt.Print("Do you want to customize the file name? (Y/N): ")
-	scanner.Scan()
-	customNameChoice := strings.ToUpper(scanner.Text())
-	if customNameChoice != "Y" {
-		customNameChoice = "N"
-	}
+			streamData := map[string]interface{}{
+				"ts":                                currentTS,
+				"ms_played":                         msPlayed,
+				"master_metadata_track_name":        selectedTrack.Name,
+				"master_metadata_album_artist_name": "Artist Name",
+				"master_metadata_album_album_name":  "Album Name",
+				"spotify_track_uri":                 "spotify:track:" + selectedTrack.ID,
+			}
 
-	filename := "output.json"
-	if customNameChoice == "Y" {
-		fmt.Print("Enter desired file name: ")
-		scanner.Scan()
-		customName := scanner.Text()
-		customName = sanitizeFilename(customName)
-		filename = customName + ".json"
-	}
+			dataList = append(dataList, streamData)
+			currentTS = updatedTS
+		}
 
-	err = os.WriteFile(filename, outputFile, 0644)
-	if err != nil {
-		panic(err)
-	}
+		outputFile, err := json.MarshalIndent(dataList, "", "    ")
+		if err != nil {
+			panic(err)
+		}
 
-	fmt.Printf("Data written to %s\n", filename)
+		filename := fmt.Sprintf("output_%s.json", sanitizeFilename(trackID))
+		err = os.WriteFile(filename, outputFile, 0644)
+		if err != nil {
+			panic(err)
+		}
+
+		fmt.Printf("Data written to %s\n", filename)
+	}
 }
