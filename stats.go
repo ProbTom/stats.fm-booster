@@ -86,41 +86,75 @@ func main() {
 		Duration: 200000,
 	}
 
-	fmt.Print("Enter total number of streams: ")
+	// New prompt for maximum streaming density
+	fmt.Print("Ignore dates for maximum streaming density? (Y/N): ")
 	scanner.Scan()
-	totalPlays, err := strconv.Atoi(scanner.Text())
-	if err != nil || totalPlays <= 0 {
-		fmt.Println("Invalid input for total streams. Using default value of 10.")
-		totalPlays = 10
+	maxDensityChoice := strings.ToUpper(scanner.Text())
+	if maxDensityChoice != "Y" {
+		maxDensityChoice = "N"
 	}
 
-	fmt.Print("Enter start date (e.g., 2015): ")
-	scanner.Scan()
-	startYear, err := strconv.Atoi(scanner.Text())
-	if err != nil || startYear < 2000 || startYear > time.Now().Year() {
-		fmt.Println("Invalid start date. Using default value of 2015.")
-		startYear = 2015
+	var totalPlays int
+	if maxDensityChoice == "Y" {
+		totalPlays = 389306 // Hardcoded for maximum streaming density
+	} else {
+		fmt.Print("Enter total number of streams: ")
+		scanner.Scan()
+		totalPlays, err := strconv.Atoi(scanner.Text())
+		if err != nil || totalPlays <= 0 {
+			fmt.Println("Invalid input for total streams. Using default value of 10.")
+			totalPlays = 10
+		}
 	}
 
-	fmt.Print("Enter end date (e.g., 2025): ")
-	scanner.Scan()
-	endYear, err := strconv.Atoi(scanner.Text())
-	if err != nil || endYear < startYear || endYear > time.Now().Year()+10 {
-		fmt.Println("Invalid end date. Using default value of 2025.")
-		endYear = 2025
+	var startYear, endYear int
+	if maxDensityChoice == "N" {
+		fmt.Print("Enter start date (e.g., 2015): ")
+		scanner.Scan()
+		startYear, err := strconv.Atoi(scanner.Text())
+		if err != nil || startYear < 2000 || startYear > time.Now().Year() {
+			fmt.Println("Invalid start date. Using default value of 2015.")
+			startYear = 2015
+		}
+
+		fmt.Print("Enter end date (e.g., 2025): ")
+		scanner.Scan()
+		endYear, err := strconv.Atoi(scanner.Text())
+		if err != nil || endYear < startYear || endYear > time.Now().Year()+10 {
+			fmt.Println("Invalid end date. Using default value of 2025.")
+			endYear = 2025
+		}
+	} else {
+		// If max density is enabled, use a fixed start date (e.g., 2023-01-21)
+		startYear = 2023
+		endYear = 2023
 	}
 
 	dataList := make([]map[string]interface{}, 0)
-	currentTS := time.Date(getRandomYear(startYear, endYear), time.Month(rand.Intn(12)+1), rand.Intn(28)+1, rand.Intn(24), rand.Intn(60), rand.Intn(60), 0, time.UTC).Format("2006-01-02T15:04:05Z")
+	var currentTS string
+
+	if maxDensityChoice == "Y" {
+		// Use a fixed start timestamp for maximum streaming density
+		currentTS = "2023-01-21T00:00:00Z"
+	} else {
+		// Generate a random timestamp within the specified date range
+		currentTS = time.Date(getRandomYear(startYear, endYear), time.Month(rand.Intn(12)+1), rand.Intn(28)+1, rand.Intn(24), rand.Intn(60), rand.Intn(60), 0, time.UTC).Format("2006-01-02T15:04:05Z")
+	}
 
 	for i := 0; i < totalPlays; i++ {
-		msPlayed := rand.Intn(selectedTrack.Duration)
+		msPlayed := selectedTrack.Duration // Use full track duration for maximum density
+		if maxDensityChoice == "N" {
+			msPlayed = rand.Intn(selectedTrack.Duration) // Random duration for non-max density
+		}
+
 		updatedTS := addMilliseconds(currentTS, msPlayed)
 
 		streamData := map[string]interface{}{
 			"ts":                                currentTS,
 			"ms_played":                         msPlayed,
 			"master_metadata_track_name":        selectedTrack.Name,
+			"master_metadata_album_artist_name": "Artist Name",
+			"master_metadata_album_album_name":  "Album Name",
 			"spotify_track_uri":                 "spotify:track:" + selectedTrack.ID,
 		}
 
@@ -149,30 +183,10 @@ func main() {
 		filename = customName + ".json"
 	}
 
-	err = writeToFile(filename, outputFile)
+	err = os.WriteFile(filename, outputFile, 0644)
 	if err != nil {
 		panic(err)
 	}
 
 	fmt.Printf("Data written to %s\n", filename)
-}
-
-func writeToFile(filename string, data []byte) error {
-	file, err := os.Create(filename)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	_, err = file.Write(data)
-	if err != nil {
-		return err
-	}
-
-	err = file.Sync()
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
