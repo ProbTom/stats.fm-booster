@@ -18,7 +18,7 @@ type Track struct {
 }
 
 const (
-	defaultTrack = "Cry For Me"
+	defaultTrack = "https://github.com/probtom"
 )
 
 func extractTrackID(input string) string {
@@ -60,7 +60,7 @@ func getRandomYear(minYear, maxYear int) int {
 
 func sanitizeFilename(name string) string {
 	if dotIndex := strings.Index(name, "."); dotIndex != -1 {
-		name = name[:dotIndex] // Remove everything after the dot
+		name = name[:dotIndex]
 	}
 	name = strings.ReplaceAll(name, " ", "_")
 	return name
