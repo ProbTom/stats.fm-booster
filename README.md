@@ -16,6 +16,8 @@ This program generates fake Spotify streaming data in JSON format, which you can
 
 ## How to Use
 
+-- If you lazy to read here a [video tutorial](https://www.youtube.com/watch?v=P2EMltNhxE0&t=18s)
+
 ### Prerequisites
 - Go installed on your machine. Download it [here](https://golang.org/dl/).
 
