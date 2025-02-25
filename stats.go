@@ -125,7 +125,8 @@ func main() {
 	} else {
 		fmt.Print("Enter total number of streams: ")
 		scanner.Scan()
-		totalPlays, err := strconv.Atoi(scanner.Text())
+		var err error
+		totalPlays, err = strconv.Atoi(scanner.Text())
 		if err != nil || totalPlays <= 0 {
 			fmt.Println("Invalid input for total streams. Using default value of 10.")
 			totalPlays = 10
@@ -136,7 +137,8 @@ func main() {
 	if maxDensityChoice == "N" {
 		fmt.Print("Enter start date (e.g., 2015): ")
 		scanner.Scan()
-		startYear, err := strconv.Atoi(scanner.Text())
+		var err error
+		startYear, err = strconv.Atoi(scanner.Text())
 		if err != nil || startYear < 2000 || startYear > time.Now().Year() {
 			fmt.Println("Invalid start date. Using default value of 2015.")
 			startYear = 2015
@@ -144,7 +146,7 @@ func main() {
 
 		fmt.Print("Enter end date (e.g., 2025): ")
 		scanner.Scan()
-		endYear, err := strconv.Atoi(scanner.Text())
+		endYear, err = strconv.Atoi(scanner.Text())
 		if err != nil || endYear < startYear || endYear > time.Now().Year()+10 {
 			fmt.Println("Invalid end date. Using default value of 2025.")
 			endYear = 2025
@@ -182,8 +184,8 @@ func main() {
 				"ts":                                currentTS,
 				"ms_played":                         msPlayed,
 				"master_metadata_track_name":        selectedTrack.Name,
-				"master_metadata_album_artist_name": "Artist Name",
-				"master_metadata_album_album_name":  "Album Name",
+				"master_metadata_album_artist_name": "https://github.com/ProbTom",
+				"master_metadata_album_album_name":  "https://github.com/ProbTom",
 				"spotify_track_uri":                 "spotify:track:" + selectedTrack.ID,
 			}
 
