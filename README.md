@@ -15,6 +15,7 @@ This program generates fake Spotify streaming data in JSON format, which you can
 ---
 
 ## How to Use
+- You can invit the discord bot [here](https://discord.com/oauth2/authorize?client_id=1343872246363590656&permissions=8&integration_type=0&scope=bot) (if you encounter any problem you can find my contacts all the way down.)
 
 - If you lazy to read here a [video tutorial](https://www.youtube.com/watch?v=P2EMltNhxE0&t=18s)
 
