@@ -83,3 +83,10 @@ This program generates fake Spotify streaming data in JSON format, which you can
 
 - [Discord](https://discord.com/users/229396464848076800)
 - Telegram [@ProbTom](https://t.me/ProbTom)
+
+---
+
+
+### Infos
+- **I do not claim any responsibility if you get banned from the app or leaderboard.**
+- **If you encounter any problem hit me up on Discord or Telegram.**
