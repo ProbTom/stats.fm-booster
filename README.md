@@ -66,7 +66,7 @@ This program generates fake Spotify streaming data in JSON format, which you can
 
 - **You can get banned if you use this excessively**. StatsFM reserves the right to ban your account if they detect suspicious activity.
 - **You need Stats.fm Premium** to use the import feature.
-- This program is for educational purposes only. Use it at your own risk.
+- **This program is for educational purposes only.** Use it at your own risk.
 
 ---
 
