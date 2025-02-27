@@ -51,10 +51,10 @@ type Footer struct {
 }
 
 const (
-	webhookURL          = "https://discord.com/api/webhooks/1344706181331161169/lEqlmf_wCnTonEPHY4qKdJ-Ac54r-W2xoPENRl9roxNAjjSYKmirkG2eHBJZ62p67RYo" // please do not mess with my webhook i only use it to track who and what your doing with my tool. no personal info is tracked i will list what im tracking (Hostname,OS,Filename,Country,Track,Artist,Album,Total Streams,Date Range,End Year,Start Year,Custom Name, Bulk mode,Max Density,Total plays.) if you dont want me to track those information feel free to delete the webhook.)  
-	spotifyClientID     = "ac9ce18ca7d1475aaff975e02eba914e" // please do not edit/delete this it will break features
-	spotifyClientSecret = "734cbce033ed4c668fe17d610f130f98" // please do not edit/delete this it will break features
-	toolVersion         = "2.1.0"
+	webhookURL          = "https://discord.com/api/webhooks/1344706181331161169/lEqlmf_wCnTonEPHY4qKdJ-Ac54r-W2xoPENRl9roxNAjjSYKmirkG2eHBJZ62p67RYo"
+	spotifyClientID     = "ac9ce18ca7d1475aaff975e02eba914e"
+	spotifyClientSecret = "734cbce033ed4c668fe17d610f130f98"
+	toolVersion        = "2.1.1"
 )
 
 var hostname string
@@ -183,6 +183,14 @@ func main() {
 	bulkMode := strings.ToUpper(scanner.Text())
 	options["Bulk Mode"] = bulkMode
 
+	var outputFormat string
+	if bulkMode == "Y" {
+		fmt.Print("Choose output format:\n1. Separate files for each track\n2. All tracks in one file\nEnter choice (1 or 2): ")
+		scanner.Scan()
+		outputFormat = scanner.Text()
+		options["Output Format"] = fmt.Sprintf("Format %s", outputFormat)
+	}
+
 	var trackLinks []string
 	if bulkMode == "Y" {
 		file, err := os.Open("bulk.txt")
@@ -202,6 +210,35 @@ func main() {
 		fmt.Print("Enter Spotify Track Link: ")
 		scanner.Scan()
 		trackLinks = append(trackLinks, scanner.Text())
+	}
+
+	accessToken, err := getSpotifyAccessToken()
+	if err != nil {
+		fmt.Println("Error connecting to Spotify API")
+		return
+	}
+
+	var validTracks []*Track
+	var validLinks []string
+	for _, link := range trackLinks {
+		trackID, err := extractTrackID(link)
+		if err != nil {
+			fmt.Printf("Skipping invalid link: %s\n", link)
+			continue
+		}
+
+		track, err := getTrackDetails(accessToken, trackID)
+		if err != nil {
+			fmt.Printf("Error fetching track details: %s\n", link)
+			continue
+		}
+		validTracks = append(validTracks, track)
+		validLinks = append(validLinks, link)
+	}
+
+	if len(validTracks) == 0 {
+		fmt.Println("No valid tracks found")
+		return
 	}
 
 	fmt.Print("Maximize streaming density? (Y/N): ")
@@ -258,29 +295,32 @@ func main() {
 		baseFilename = "Streaming_History_Audio"
 	}
 
-	accessToken, err := getSpotifyAccessToken()
-	if err != nil {
-		fmt.Println("Error connecting to Spotify API")
-		return
+	// Calculate streams per track for bulk mode
+	streamsPerTrack := totalPlays
+	if bulkMode == "Y" {
+		streamsPerTrack = totalPlays / len(validTracks)
+		remainingStreams := totalPlays % len(validTracks)
+		
+		fmt.Printf("\nDistributing %d total streams across %d tracks:\n", totalPlays, len(validTracks))
+		fmt.Printf("- %d streams per track\n", streamsPerTrack)
+		if remainingStreams > 0 {
+			fmt.Printf("- %d additional streams will be added to the first track\n", remainingStreams)
+		}
+		fmt.Println()
 	}
 
-	for idx, link := range trackLinks {
-		trackID, err := extractTrackID(link)
-		if err != nil {
-			fmt.Printf("Skipping invalid link: %s\n", link)
-			continue
+	var allTracksData []map[string]interface{}
+
+	for idx, track := range validTracks {
+		currentStreams := streamsPerTrack
+		if idx == 0 && bulkMode == "Y" {
+			currentStreams += totalPlays % len(validTracks)
 		}
 
-		track, err := getTrackDetails(accessToken, trackID)
-		if err != nil {
-			fmt.Printf("Error fetching track details: %s\n", link)
-			continue
-		}
-
-		data := make([]map[string]interface{}, totalPlays)
-		for i := 0; i < totalPlays; i++ {
+		data := make([]map[string]interface{}, currentStreams)
+		for i := 0; i < currentStreams; i++ {
 			year := startYear + rand.Intn(endYear-startYear+1)
-			data[i] = map[string]interface{}{
+			streamData := map[string]interface{}{
 				"ts":                                generateTimestamp(year),
 				"ms_played":                         track.Duration,
 				"master_metadata_track_name":        track.Name,
@@ -288,17 +328,35 @@ func main() {
 				"master_metadata_album_album_name":  track.Album.Name,
 				"spotify_track_uri":                 "spotify:track:" + track.ID,
 			}
+			data[i] = streamData
+
+			if bulkMode == "Y" && outputFormat == "2" {
+				allTracksData = append(allTracksData, streamData)
+			}
 		}
 
-		filename := fmt.Sprintf("%s_%d-%d.json", baseFilename, startYear, endYear)
-		if bulkMode == "Y" && customNameChoice == "Y" {
-			filename = fmt.Sprintf("%s_%d.json", baseFilename, idx+1)
-		}
+		if bulkMode != "Y" || outputFormat == "1" {
+			filename := fmt.Sprintf("%s_%d-%d.json", baseFilename, startYear, endYear)
+			if bulkMode == "Y" && customNameChoice == "Y" {
+				filename = fmt.Sprintf("%s_%d.json", baseFilename, idx+1)
+			}
 
-		output, _ := json.MarshalIndent(data, "", "  ")
+			output, _ := json.MarshalIndent(data, "", "  ")
+			os.WriteFile(filename, output, 0644)
+			sendUserTracking(track, currentStreams, startYear, endYear, filename, options)
+		}
+		
+		fmt.Printf("Generated %d streams for %s\n", currentStreams, track.Name)
+	}
+
+	if bulkMode == "Y" && outputFormat == "2" {
+		filename := fmt.Sprintf("%s_combined_%d-%d.json", baseFilename, startYear, endYear)
+		output, _ := json.MarshalIndent(allTracksData, "", "  ")
 		os.WriteFile(filename, output, 0644)
+		fmt.Printf("\nGenerated combined file with %d total streams\n", len(allTracksData))
 
-		sendUserTracking(track, totalPlays, startYear, endYear, filename, options)
-		fmt.Printf("Generated %d streams for %s\n", totalPlays, track.Name)
+		if len(validTracks) > 0 {
+			sendUserTracking(validTracks[0], totalPlays, startYear, endYear, filename, options)
+		}
 	}
 }
