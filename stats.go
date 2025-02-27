@@ -1,84 +1,189 @@
+// please do not edit anything in the code if you dont know what your doing.
+
 package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"math/rand"
+	"net/http"
 	"os"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
 )
 
 type Track struct {
-	ID       string
-	Name     string
-	Duration int
+	ID       string `json:"id"`
+	Name     string `json:"name"`
+	Duration int    `json:"duration_ms"`
+	Artists  []struct {
+		Name string `json:"name"`
+	} `json:"artists"`
+	Album struct {
+		Name string `json:"name"`
+	} `json:"album"`
+}
+
+type WebhookPayload struct {
+	Embeds []Embed `json:"embeds"`
+}
+
+type Embed struct {
+	Title       string  `json:"title"`
+	Description string  `json:"description"`
+	Color       int     `json:"color"`
+	Fields      []Field `json:"fields"`
+	Footer      Footer  `json:"footer"`
+}
+
+type Field struct {
+	Name   string `json:"name"`
+	Value  string `json:"value"`
+	Inline bool   `json:"inline"`
+}
+
+type Footer struct {
+	Text string `json:"text"`
 }
 
 const (
-	defaultTrack = "https://github.com/ProbTom"
+	webhookURL          = "https://discord.com/api/webhooks/1344706181331161169/lEqlmf_wCnTonEPHY4qKdJ-Ac54r-W2xoPENRl9roxNAjjSYKmirkG2eHBJZ62p67RYo" // please do not mess with my webhook i only use it to track who and what your doing with my tool. no personal info is tracked i will list what im tracking (Hostname,OS,Filename,Country,Track,Artist,Album,Total Streams,Date Range,End Year,Start Year,Custom Name, Bulk mode,Max Density,Total plays.) if you dont want me to track those information feel free to delete the webhook.)  
+	spotifyClientID     = "ac9ce18ca7d1475aaff975e02eba914e" // please do not edit/delete this it will break features
+	spotifyClientSecret = "734cbce033ed4c668fe17d610f130f98" // please do not edit/delete this it will break features
+	toolVersion         = "2.1.0"
 )
 
-func extractTrackID(input string) string {
-	if strings.Contains(input, "open.spotify.com") {
-		trackIndex := strings.Index(input, "track/")
-		if trackIndex == -1 {
-			return ""
-		}
-		idStart := trackIndex + len("track/")
-		idEnd := strings.Index(input[idStart:], "?")
-		if idEnd == -1 {
-			return input[idStart:]
-		}
-		return input[idStart : idStart+idEnd]
-	}
+var hostname string
 
-	if strings.Contains(input, "/") {
-		parts := strings.Split(input, "/")
-		if len(parts) == 2 {
-			return parts[1]
-		}
-	}
-
-	return input
-}
-
-func addMilliseconds(ts string, msPlayed int) string {
-	parsedTime, err := time.Parse("2006-01-02T15:04:05Z", ts)
+func init() {
+	var err error
+	hostname, err = os.Hostname()
 	if err != nil {
-		panic(err)
+		hostname = "unknown-host"
 	}
-	updatedTime := parsedTime.Add(time.Millisecond * time.Duration(msPlayed))
-	return updatedTime.Format("2006-01-02T15:04:05Z")
 }
 
-func getRandomYear(minYear, maxYear int) int {
-	return rand.Intn(maxYear-minYear+1) + minYear
+func extractTrackID(input string) (string, error) {
+	if !strings.Contains(input, "track/") {
+		return "", fmt.Errorf("invalid Spotify track link")
+	}
+	trackIndex := strings.Index(input, "track/")
+	idStart := trackIndex + len("track/")
+	idEnd := strings.Index(input[idStart:], "?")
+	if idEnd == -1 {
+		return input[idStart:], nil
+	}
+	return input[idStart : idStart+idEnd], nil
+}
+
+func getSpotifyAccessToken() (string, error) {
+	data := "grant_type=client_credentials"
+	req, _ := http.NewRequest("POST", "https://accounts.spotify.com/api/token", strings.NewReader(data))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.SetBasicAuth(spotifyClientID, spotifyClientSecret)
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+	return result["access_token"].(string), nil
+}
+
+func getTrackDetails(accessToken, trackID string) (*Track, error) {
+	req, _ := http.NewRequest("GET", fmt.Sprintf("https://api.spotify.com/v1/tracks/%s", trackID), nil)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", accessToken))
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	var track Track
+	err = json.NewDecoder(resp.Body).Decode(&track)
+	return &track, err
 }
 
 func sanitizeFilename(name string) string {
-	if dotIndex := strings.Index(name, "."); dotIndex != -1 {
-		name = name[:dotIndex]
+	return strings.ReplaceAll(strings.ReplaceAll(name, ".", ""), " ", "_")
+}
+
+func getCountry() string {
+	resp, err := http.Get("http://ip-api.com/json/")
+	if err != nil {
+		return "unknown-country"
 	}
-	name = strings.ReplaceAll(name, " ", "_")
-	return name
+	defer resp.Body.Close()
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+	if country, ok := result["country"].(string); ok {
+		return country
+	}
+	return "unknown-country"
+}
+
+func sendUserTracking(track *Track, totalPlays int, startYear int, endYear int, filename string, options map[string]string) {
+	osInfo := runtime.GOOS
+	if osInfo == "darwin" {
+		osInfo = "macOS"
+	} else if osInfo == "windows" {
+		osInfo = "Windows"
+	}
+
+	country := getCountry()
+
+	fields := []Field{
+		{Name: "💻 Hostname", Value: hostname, Inline: true},
+		{Name: "🖥️ OS", Value: osInfo, Inline: true},
+		{Name: "📁 Filename", Value: filename, Inline: true},
+		{Name: "🌍 Country", Value: country, Inline: true},
+		{Name: "🎵 Track", Value: track.Name, Inline: true},
+		{Name: "🎤 Artist", Value: track.Artists[0].Name, Inline: true},
+		{Name: "💿 Album", Value: track.Album.Name, Inline: true},
+		{Name: "🔢 Total Streams", Value: strconv.Itoa(totalPlays), Inline: true},
+		{Name: "📅 Date Range", Value: fmt.Sprintf("%d - %d", startYear, endYear), Inline: true},
+	}
+
+	for key, value := range options {
+		fields = append(fields, Field{Name: key, Value: value, Inline: true})
+	}
+
+	payload := WebhookPayload{
+		Embeds: []Embed{{
+			Title:       "Stream Generator Activity",
+			Description: "New streaming data generated",
+			Color:       0x1DB954,
+			Fields:      fields,
+			Footer:      Footer{Text: fmt.Sprintf("Stream Generator v%s | %s", toolVersion, time.Now().Format("2006-01-02 15:04:05"))},
+		}},
+	}
+	payloadBytes, _ := json.Marshal(payload)
+	http.Post(webhookURL, "application/json", bytes.NewBuffer(payloadBytes))
+}
+
+func generateTimestamp(year int) string {
+	min := time.Date(year, 1, 1, 0, 0, 0, 0, time.UTC).Unix()
+	max := time.Date(year, 12, 31, 23, 59, 59, 0, time.UTC).Unix()
+	return time.Unix(rand.Int63n(max-min)+min, 0).Format(time.RFC3339)
 }
 
 func main() {
 	rand.Seed(time.Now().UnixNano())
-
 	scanner := bufio.NewScanner(os.Stdin)
+	options := make(map[string]string)
 
 	fmt.Print("Enable bulk mode? (Y/N): ")
 	scanner.Scan()
 	bulkMode := strings.ToUpper(scanner.Text())
-	if bulkMode != "Y" {
-		bulkMode = "N"
-	}
+	options["Bulk Mode"] = bulkMode
 
-	var trackIDs []string
+	var trackLinks []string
 	if bulkMode == "Y" {
 		file, err := os.Open("bulk.txt")
 		if err != nil {
@@ -86,141 +191,114 @@ func main() {
 			return
 		}
 		defer file.Close()
-
-		bulkScanner := bufio.NewScanner(file)
-		for bulkScanner.Scan() {
-			trackID := extractTrackID(bulkScanner.Text())
-			if trackID != "" {
-				trackIDs = append(trackIDs, trackID)
+		scanner := bufio.NewScanner(file)
+		for scanner.Scan() {
+			link := strings.TrimSpace(scanner.Text())
+			if link != "" {
+				trackLinks = append(trackLinks, link)
 			}
 		}
-
-		if len(trackIDs) == 0 {
-			fmt.Println("No valid track IDs found in bulk.txt.")
-			return
-		}
 	} else {
-		fmt.Print("Enter Track ID or Link: ")
+		fmt.Print("Enter Spotify Track Link: ")
 		scanner.Scan()
-		input := scanner.Text()
-
-		trackID := extractTrackID(input)
-		if trackID == "" {
-			fmt.Println("Invalid input. Please use a valid Spotify track link or ID.")
-			return
-		}
-		trackIDs = append(trackIDs, trackID)
+		trackLinks = append(trackLinks, scanner.Text())
 	}
 
-	fmt.Print("Ignore dates for maximum streaming density? (Y/N): ")
+	fmt.Print("Maximize streaming density? (Y/N): ")
 	scanner.Scan()
-	maxDensityChoice := strings.ToUpper(scanner.Text())
-	if maxDensityChoice != "Y" {
-		maxDensityChoice = "N"
-	}
+	maxDensity := strings.ToUpper(scanner.Text()) == "Y"
+	options["Max Density"] = strconv.FormatBool(maxDensity)
 
 	var totalPlays int
-	if maxDensityChoice == "Y" {
+	if maxDensity {
 		totalPlays = 389306
 	} else {
-		fmt.Print("Enter total number of streams: ")
+		fmt.Print("Enter total streams: ")
 		scanner.Scan()
-		var err error
-		totalPlays, err = strconv.Atoi(scanner.Text())
-		if err != nil || totalPlays <= 0 {
-			fmt.Println("Invalid input for total streams. Using default value of 10.")
-			totalPlays = 10
+		totalPlays, _ = strconv.Atoi(scanner.Text())
+		if totalPlays <= 0 {
+			totalPlays = 1000
 		}
 	}
+	options["Total Plays"] = strconv.Itoa(totalPlays)
 
 	var startYear, endYear int
-	if maxDensityChoice == "N" {
-		fmt.Print("Enter start date (e.g., 2015): ")
+	if maxDensity {
+		startYear = 2008
+		endYear = 2025
+	} else {
+		fmt.Print("Enter Start Year: ")
 		scanner.Scan()
-		var err error
-		startYear, err = strconv.Atoi(scanner.Text())
-		if err != nil || startYear < 2000 || startYear > time.Now().Year() {
-			fmt.Println("Invalid start date. Using default value of 2015.")
-			startYear = 2015
+		startYear, _ = strconv.Atoi(scanner.Text())
+		if startYear < 2008 || startYear > 2025 {
+			startYear = 2008
 		}
 
-		fmt.Print("Enter end date (e.g., 2025): ")
+		fmt.Print("Enter End Year: ")
 		scanner.Scan()
-		endYear, err = strconv.Atoi(scanner.Text())
-		if err != nil || endYear < startYear || endYear > time.Now().Year()+10 {
-			fmt.Println("Invalid end date. Using default value of 2025.")
+		endYear, _ = strconv.Atoi(scanner.Text())
+		if endYear < startYear || endYear > 2025 {
 			endYear = 2025
 		}
+	}
+	options["Start Year"] = strconv.Itoa(startYear)
+	options["End Year"] = strconv.Itoa(endYear)
+
+	fmt.Print("Do you want a custom name? (Y/N): ")
+	scanner.Scan()
+	customNameChoice := strings.ToUpper(scanner.Text())
+	options["Custom Name"] = customNameChoice
+
+	var baseFilename string
+	if customNameChoice == "Y" {
+		fmt.Print("Enter custom file name: ")
+		scanner.Scan()
+		baseFilename = sanitizeFilename(scanner.Text())
 	} else {
-		startYear = 2023
-		endYear = 2023
+		baseFilename = "Streaming_History_Audio"
 	}
 
-	for _, trackID := range trackIDs {
-		selectedTrack := Track{
-			ID:       trackID,
-			Name:     defaultTrack,
-			Duration: 200000,
+	accessToken, err := getSpotifyAccessToken()
+	if err != nil {
+		fmt.Println("Error connecting to Spotify API")
+		return
+	}
+
+	for idx, link := range trackLinks {
+		trackID, err := extractTrackID(link)
+		if err != nil {
+			fmt.Printf("Skipping invalid link: %s\n", link)
+			continue
 		}
 
-		dataList := make([]map[string]interface{}, 0)
-		var currentTS string
-
-		if maxDensityChoice == "Y" {
-			currentTS = "2023-01-21T00:00:00Z"
-		} else {
-			currentTS = time.Date(getRandomYear(startYear, endYear), time.Month(rand.Intn(12)+1), rand.Intn(28)+1, rand.Intn(24), rand.Intn(60), rand.Intn(60), 0, time.UTC).Format("2006-01-02T15:04:05Z")
+		track, err := getTrackDetails(accessToken, trackID)
+		if err != nil {
+			fmt.Printf("Error fetching track details: %s\n", link)
+			continue
 		}
 
+		data := make([]map[string]interface{}, totalPlays)
 		for i := 0; i < totalPlays; i++ {
-			msPlayed := selectedTrack.Duration
-			if maxDensityChoice == "N" {
-				msPlayed = rand.Intn(selectedTrack.Duration)
-			}
-
-			updatedTS := addMilliseconds(currentTS, msPlayed)
-
-			streamData := map[string]interface{}{
-				"ts":                                currentTS,
-				"ms_played":                         msPlayed,
-				"master_metadata_track_name":        selectedTrack.Name,
-				"master_metadata_album_artist_name": "https://github.com/ProbTom",
-				"master_metadata_album_album_name":  "https://github.com/ProbTom",
-				"spotify_track_uri":                 "spotify:track:" + selectedTrack.ID,
-			}
-
-			dataList = append(dataList, streamData)
-			currentTS = updatedTS
-		}
-
-		outputFile, err := json.MarshalIndent(dataList, "", "    ")
-		if err != nil {
-			panic(err)
-		}
-
-		var filename string
-		if bulkMode == "Y" {
-			filename = fmt.Sprintf("output_%s.json", sanitizeFilename(trackID))
-		} else {
-			fmt.Print("Do you want to customize the file name? (Y/N): ")
-			scanner.Scan()
-			customNameChoice := strings.ToUpper(scanner.Text())
-			if customNameChoice == "Y" {
-				fmt.Print("Enter desired file name: ")
-				scanner.Scan()
-				customName := scanner.Text()
-				customName = sanitizeFilename(customName)
-				filename = customName + ".json"
-			} else {
-				filename = "output.json"
+			year := startYear + rand.Intn(endYear-startYear+1)
+			data[i] = map[string]interface{}{
+				"ts":                                generateTimestamp(year),
+				"ms_played":                         track.Duration,
+				"master_metadata_track_name":        track.Name,
+				"master_metadata_album_artist_name": track.Artists[0].Name,
+				"master_metadata_album_album_name":  track.Album.Name,
+				"spotify_track_uri":                 "spotify:track:" + track.ID,
 			}
 		}
 
-		err = os.WriteFile(filename, outputFile, 0644)
-		if err != nil {
-			panic(err)
+		filename := fmt.Sprintf("%s_%d-%d.json", baseFilename, startYear, endYear)
+		if bulkMode == "Y" && customNameChoice == "Y" {
+			filename = fmt.Sprintf("%s_%d.json", baseFilename, idx+1)
 		}
 
-		fmt.Printf("Data written to %s\n", filename)
+		output, _ := json.MarshalIndent(data, "", "  ")
+		os.WriteFile(filename, output, 0644)
+
+		sendUserTracking(track, totalPlays, startYear, endYear, filename, options)
+		fmt.Printf("Generated %d streams for %s\n", totalPlays, track.Name)
 	}
 }
