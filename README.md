@@ -10,6 +10,8 @@ A simple Go program to generate mock Spotify streaming data for importing into S
 
 This program generates fake Spotify streaming data in JSON format, which you can import into StatsFM. It allows you to simulate streams for any track, album, or artist by providing a Spotify ID or link.
 
+I highly recommend using the discord bot if you dont care about bulk mode.
+
 **Note**: StatsFM does not currently verify the legitimacy of imported data, but excessive use of this tool may result in a ban. Use responsibly!
 
 ---
