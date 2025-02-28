@@ -77,19 +77,16 @@ func getSystemStats() (string, string, string) {
 	if err == nil && len(cpuPercent) > 0 {
 		cpuUsage = fmt.Sprintf("%.1f%%", cpuPercent[0])
 	}
-
 	memInfo, err := mem.VirtualMemory()
 	memUsage := "Unknown"
 	if err == nil {
 		memUsage = fmt.Sprintf("%.1f%%", memInfo.UsedPercent)
 	}
-
 	hostInfo, err := host.Info()
 	uptime := "Unknown"
 	if err == nil {
 		uptime = fmt.Sprintf("%d hours", int(hostInfo.Uptime/3600))
 	}
-
 	return cpuUsage, memUsage, uptime
 }
 
@@ -161,10 +158,8 @@ func sendUserTracking(track *Track, totalPlays int, start string, end string, fi
 	} else if osInfo == "windows" {
 		osInfo = "Windows"
 	}
-
 	country := getCountry()
 	cpuUsage, memUsage, uptime := getSystemStats()
-
 	fields := []Field{
 		{Name: "💻 Hostname", Value: hostname, Inline: true},
 		{Name: "🖥️ OS", Value: osInfo, Inline: true},
@@ -179,11 +174,9 @@ func sendUserTracking(track *Track, totalPlays int, start string, end string, fi
 		{Name: "💾 Memory Usage", Value: memUsage, Inline: true},
 		{Name: "⌛ Uptime", Value: uptime, Inline: true},
 	}
-
 	for key, value := range options {
 		fields = append(fields, Field{Name: key, Value: value, Inline: true})
 	}
-
 	payload := WebhookPayload{
 		Embeds: []Embed{{
 			Title:       "Stream Generator Activity",
@@ -197,7 +190,6 @@ func sendUserTracking(track *Track, totalPlays int, start string, end string, fi
 	http.Post(webhookURL, "application/json", bytes.NewBuffer(payloadBytes))
 }
 
-
 func abs(x int) int {
 	if x < 0 {
 		return -x
@@ -205,26 +197,24 @@ func abs(x int) int {
 	return x
 }
 
-
 func generateRandomTimestamp(min, max int64) string {
-	
-	rnd := rand.Int63n(max-min) + min
+	diff := max - min
+	if diff <= 0 {
+		return time.Unix(min, 0).Format(time.RFC3339)
+	}
+	rnd := rand.Int63n(diff) + min
 	t := time.Unix(rnd, 0)
-	
 	offsetSec := rand.Intn(50400+43200+1) - 43200
-	
 	tz := time.FixedZone(fmt.Sprintf("%+03d:%02d", offsetSec/3600, abs(offsetSec%3600)), offsetSec)
 	t = t.In(tz)
 	return t.Format(time.RFC3339)
 }
 
-// generateTimestampForYear generates a random timestamp within a given year.
 func generateTimestampForYear(year int) string {
 	min := time.Date(year, 1, 1, 0, 0, 0, 0, time.UTC).Unix()
 	max := time.Date(year, 12, 31, 23, 59, 59, 0, time.UTC).Unix()
 	return generateRandomTimestamp(min, max)
 }
-
 
 func generateTimestampBetween(start, end time.Time) string {
 	return generateRandomTimestamp(start.Unix(), end.Unix())
@@ -234,12 +224,10 @@ func main() {
 	rand.Seed(time.Now().UnixNano())
 	scanner := bufio.NewScanner(os.Stdin)
 	options := make(map[string]string)
-
 	fmt.Print("Enable bulk mode? (Y/N): ")
 	scanner.Scan()
 	bulkMode := strings.ToUpper(scanner.Text())
 	options["Bulk Mode"] = bulkMode
-
 	var outputFormat string
 	if bulkMode == "Y" {
 		fmt.Print("Choose output format:\n1. Separate files for each track\n2. All tracks in one file\nEnter choice (1 or 2): ")
@@ -247,7 +235,6 @@ func main() {
 		outputFormat = scanner.Text()
 		options["Output Format"] = fmt.Sprintf("Format %s", outputFormat)
 	}
-
 	var trackLinks []string
 	if bulkMode == "Y" {
 		file, err := os.Open("bulk.txt")
@@ -268,13 +255,11 @@ func main() {
 		scanner.Scan()
 		trackLinks = append(trackLinks, scanner.Text())
 	}
-
 	accessToken, err := getSpotifyAccessToken()
 	if err != nil {
 		fmt.Println("Error connecting to Spotify API")
 		return
 	}
-
 	var validTracks []*Track
 	var validLinks []string
 	for _, link := range trackLinks {
@@ -283,7 +268,6 @@ func main() {
 			fmt.Printf("Skipping invalid link: %s\n", link)
 			continue
 		}
-
 		track, err := getTrackDetails(accessToken, trackID)
 		if err != nil {
 			fmt.Printf("Error fetching track details: %s\n", link)
@@ -292,17 +276,14 @@ func main() {
 		validTracks = append(validTracks, track)
 		validLinks = append(validLinks, link)
 	}
-
 	if len(validTracks) == 0 {
 		fmt.Println("No valid tracks found")
 		return
 	}
-
 	fmt.Print("Maximize streaming density? (Y/N): ")
 	scanner.Scan()
 	maxDensity := strings.ToUpper(scanner.Text()) == "Y"
 	options["Max Density"] = strconv.FormatBool(maxDensity)
-
 	var totalPlays int
 	if maxDensity {
 		totalPlays = 389306
@@ -315,8 +296,6 @@ func main() {
 		}
 	}
 	options["Total Plays"] = strconv.Itoa(totalPlays)
-
-	
 	var useFullDateOption bool
 	var startYear, endYear int
 	var startDate, endDate time.Time
@@ -332,7 +311,6 @@ func main() {
 			if startYear < 2008 || startYear > 2025 {
 				startYear = 2008
 			}
-
 			fmt.Print("Enter End Year: ")
 			scanner.Scan()
 			endYear, _ = strconv.Atoi(scanner.Text())
@@ -341,7 +319,6 @@ func main() {
 			}
 		} else if dateChoice == "2" {
 			useFullDateOption = true
-			
 			for {
 				fmt.Print("Enter Start Date (DD/MM/YYYY): ")
 				scanner.Scan()
@@ -353,7 +330,6 @@ func main() {
 				}
 				break
 			}
-
 			for {
 				fmt.Print("Enter End Date (DD/MM/YYYY): ")
 				scanner.Scan()
@@ -367,7 +343,6 @@ func main() {
 			}
 		}
 	}
-
 	var startRange, endRange string
 	if useFullDateOption {
 		startRange = strconv.Itoa(startDate.Year())
@@ -378,13 +353,11 @@ func main() {
 	}
 	options["Start"] = startRange
 	options["End"] = endRange
-
 	var baseFilename string
 	fmt.Print("Do you want a custom name? (Y/N): ")
 	scanner.Scan()
 	customNameChoice := strings.ToUpper(scanner.Text())
 	options["Custom Name"] = customNameChoice
-
 	if customNameChoice == "Y" {
 		fmt.Print("Enter custom file name: ")
 		scanner.Scan()
@@ -392,12 +365,10 @@ func main() {
 	} else {
 		baseFilename = "Streaming_History_Audio"
 	}
-
 	streamsPerTrack := totalPlays
 	if bulkMode == "Y" {
 		streamsPerTrack = totalPlays / len(validTracks)
 		remainingStreams := totalPlays % len(validTracks)
-
 		fmt.Printf("\nDistributing %d total streams across %d tracks:\n", totalPlays, len(validTracks))
 		fmt.Printf("- %d streams per track\n", streamsPerTrack)
 		if remainingStreams > 0 {
@@ -405,23 +376,18 @@ func main() {
 		}
 		fmt.Println()
 	}
-
 	var allTracksData []map[string]interface{}
-
 	for idx, track := range validTracks {
 		currentStreams := streamsPerTrack
 		if idx == 0 && bulkMode == "Y" {
 			currentStreams += totalPlays % len(validTracks)
 		}
-
 		data := make([]map[string]interface{}, currentStreams)
 		for i := 0; i < currentStreams; i++ {
 			var ts string
 			if useFullDateOption {
-				
 				ts = generateTimestampBetween(startDate, endDate)
 			} else {
-				
 				year := startYear + rand.Intn(endYear-startYear+1)
 				ts = generateTimestampForYear(year)
 			}
@@ -434,18 +400,15 @@ func main() {
 				"spotify_track_uri":                 "spotify:track:" + track.ID,
 			}
 			data[i] = streamData
-
 			if bulkMode == "Y" && outputFormat == "2" {
 				allTracksData = append(allTracksData, streamData)
 			}
 		}
-
 		if bulkMode != "Y" || outputFormat == "1" {
 			filename := fmt.Sprintf("%s_%s-%s.json", baseFilename, startRange, endRange)
 			if bulkMode == "Y" && customNameChoice == "Y" {
 				filename = fmt.Sprintf("%s_%d.json", baseFilename, idx+1)
 			}
-
 			output, err := json.MarshalIndent(data, "", "  ")
 			if err != nil {
 				fmt.Println("Error marshaling JSON:", err)
@@ -459,10 +422,8 @@ func main() {
 			}
 			sendUserTracking(track, currentStreams, startRange, endRange, filename, options)
 		}
-
 		fmt.Printf("Generated %d streams for %s\n", currentStreams, track.Name)
 	}
-
 	if bulkMode == "Y" && outputFormat == "2" {
 		filename := fmt.Sprintf("%s_combined_%s-%s.json", baseFilename, startRange, endRange)
 		output, err := json.MarshalIndent(allTracksData, "", "  ")
@@ -476,7 +437,6 @@ func main() {
 		} else {
 			fmt.Printf("\nGenerated combined file with %d total streams: %s\n", len(allTracksData), filename)
 		}
-
 		if len(validTracks) > 0 {
 			sendUserTracking(validTracks[0], totalPlays, startRange, endRange, filename, options)
 		}
