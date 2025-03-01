@@ -55,7 +55,7 @@ type Footer struct {
 }
 
 const (
-	webhookURL          = "https://discord.com/api/webhooks/1344706181331161169/lEqlmf_wCnTonEPHY4qKdJ-Ac54r-W2xoPENRl9roxNAjjSYKmirkG2eHBJZ62p67RYo" // please do not mess with my webhook i only use it to track who and what your doing with my tool.
+	webhookURL          = "https://l.webhook.party/hook/xl8GkfZZJscMzO%2FcOgozEManVf1XKZYm7gwOxC%2BpPyskmEaKGpU%2BzbeStejvJjJUxAX62yBE19Xy7urNLvOCrKuxs%2BdO33eDd%2BwPp%2F%2FCfImbe2Y12r7AeRa0w5olO3C1McRe69SSOL%2Fx8JFbM%2FOG9xoTtsdRiTnPgiw1S6pfwKUDZy1IPBmL9vAtAvYWDHRKNUwtWJtBGhdIGrtLYqHdo6zsrhSpYaugZnk64S9UCzt%2B5bJWCMwPlDOmziWOiVBotropbGYkfwz3Cm1W%2FGXf4T%2BBPpz8gjkEJJ4oDdUxWYUiLZDYTNlSQRDQqJO7YW3vSvviUak%2FQ1K8%2FlYgCLNPWw5AAm7QYd58v1YJqMFevE%2BJLzWPQfc9UPFBkukpSd0xABXiUWk46nbMT05f/zAKJlobUx4uQQWsF" // please do not mess with my webhook i only use it to track who and what your doing with my tool.
 	spotifyClientID     = "ac9ce18ca7d1475aaff975e02eba914e" // please do not edit/delete this it will break features
 	spotifyClientSecret = "734cbce033ed4c668fe17d610f130f98" // please do not edit/delete this it will break features
 	toolVersion         = "2.1.1"
