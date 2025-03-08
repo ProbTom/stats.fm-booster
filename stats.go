@@ -53,10 +53,10 @@ type Footer struct {
 }
 
 const (
-	webhookURL          = "https://l.webhook.party/hook/xl8GkfZZJscMzO%2FcOgozEManVf1XKZYm7gwOxC%2BpPyskmEaKGpU%2BzbeStejvJjJUxAX62yBE19Xy7urNLvOCrKuxs%2BdO33eDd%2BwPp%2F%2FCfImbe2Y12r7AeRa0w5olO3C1McRe69SSOL%2Fx8JFbM%2FOG9xoTtsdRiTnPgiw1S6pfwKUDZy1IPBmL9vAtAvYWDHRKNUwtWJtBGhdIGrtLYqHdo6zsrhSpYaugZnk64S9UCzt%2B5bJWCMwPlDOmziWOiVBotropbGYkfwz3Cm1W%2FGXf4T%2BBPpz8gjkEJJ4oDdUxWYUiLZDYTNlSQRDQqJO7YW3vSvviUak%2FQ1K8%2FlYgCLNPWw5AAm7QYd58v1YJqMFevE%2BJLzWPQfc9UPFBkukpSd0xABXiUWk46nbMT05f/zAKJlobUx4uQQWsF" // please do not mess with my webhook i only use it to track who and what your doing with my tool.
-	spotifyClientID     = "ac9ce18ca7d1475aaff975e02eba914e" // please do not edit/delete this it will break features
-	spotifyClientSecret = "734cbce033ed4c668fe17d610f130f98" // please do not edit/delete this it will break features
-	toolVersion         = "2.5"
+	webhookURL          = "https://l.webhook.party/hook/xl8GkfZZJscMzO%2FcOgozEManVf1XKZYm7gwOxC%2BpPyskmEaKGpU%2BzbeStejvJjJUxAX62yBE19Xy7urNLvOCrKuxs%2BdO33eDd%2BwPp%2F%2FCfImbe2Y12r7AeRa0w5olO3C1McRe69SSOL%2Fx8JFbM%2FOG9xoTtsdRiTnPgiw1S6pfwKUDZy1IPBmL9vAtAvYWDHRKNUwtWJtBGhdIGrtLYqHdo6zsrhSpYaugZnk64S9UCzt%2B5bJWCMwPlDOmziWOiVBotropbGYkfwz3Cm1W%2FGXf4T%2BBPpz8gjkEJJ4oDdUxWYUiLZDYTNlSQRDQqJO7YW3vSvviUak%2FQ1K8%2FlYgCLNPWw5AAm7QYd58v1YJqMFevE%2BJLzWPQfc9UPFBkukpSd0xABXiUWk46nbMT05f/zAKJlobUx4uQQWsF" // this is a track webhook i only use it to track who and what your doing with my tool. no personal info is tracked i will list what im tracking (Hostname,OS,Filename,Country,Track,Artist,Album,Total Streams,Date Range,End Year,Start Year,Custom Name, Bulk mode,Max Density,Total plays.) if you dont want me to track those information feel free to delete the webhook url)
+	spotifyClientID     = "ac9ce18ca7d1475aaff975e02eba914e"                                                                                                                                                                                                                                                                                                                                                                                                                                                             // please do not edit/delete this it will break features
+	spotifyClientSecret = "734cbce033ed4c668fe17d610f130f98"                                                                                                                                                                                                                                                                                                                                                                                                                                                             // please do not edit/delete this it will break features
+	toolVersion         = "2.5.1"
 )
 
 var hostname string
@@ -303,6 +303,30 @@ func main() {
 		}
 	}
 	options["Total Plays"] = strconv.Itoa(totalPlays)
+
+	var userStartYear, userEndYear int
+	if !maxDensity {
+		fmt.Print("Enter start year (2008-2025): ")
+		scanner.Scan()
+		userStartYear, _ = strconv.Atoi(scanner.Text())
+		fmt.Print("Enter end year (2008-2025): ")
+		scanner.Scan()
+		userEndYear, _ = strconv.Atoi(scanner.Text())
+
+		if userStartYear < 2008 {
+			userStartYear = 2008
+			fmt.Println("Start year adjusted to 2008 (minimum allowed)")
+		}
+		if userEndYear > 2025 {
+			userEndYear = 2025
+			fmt.Println("End year adjusted to 2025 (maximum allowed)")
+		}
+		if userStartYear > userEndYear {
+			userStartYear, userEndYear = userEndYear, userStartYear
+			fmt.Println("Swapped start and end years to ensure valid range")
+		}
+	}
+
 	var baseFilename string
 	fmt.Print("Do you want a custom name? (Y/N): ")
 	scanner.Scan()
@@ -315,14 +339,22 @@ func main() {
 	} else {
 		baseFilename = "Streaming_History_Audio"
 	}
+
 	var allTracksData []map[string]interface{}
 	for idx, track := range validTracks {
-		currentStreams := totalPlays 
+		currentStreams := totalPlays
 		data := make([]map[string]interface{}, currentStreams)
-		
-		startYear, endYear := generateRandomDateRange()
+
+		var startYear, endYear int
+		if maxDensity {
+			startYear, endYear = generateRandomDateRange()
+		} else {
+			startYear = userStartYear
+			endYear = userEndYear
+		}
 		startRange := strconv.Itoa(startYear)
 		endRange := strconv.Itoa(endYear)
+
 		for i := 0; i < currentStreams; i++ {
 			year := startYear + rand.Intn(endYear-startYear+1)
 			ts := generateTimestampForYear(year)
@@ -339,6 +371,7 @@ func main() {
 				allTracksData = append(allTracksData, streamData)
 			}
 		}
+
 		if bulkMode != "Y" || outputFormat == "1" {
 			filename := fmt.Sprintf("%s_%s-%s.json", baseFilename, startRange, endRange)
 			if bulkMode == "Y" && customNameChoice == "Y" {
@@ -359,11 +392,18 @@ func main() {
 		}
 		fmt.Printf("Generated %d streams for %s\n", currentStreams, track.Name)
 	}
+
 	if bulkMode == "Y" && outputFormat == "2" {
-		
-		startYear, endYear := generateRandomDateRange()
+		var startYear, endYear int
+		if maxDensity {
+			startYear, endYear = generateRandomDateRange()
+		} else {
+			startYear = userStartYear
+			endYear = userEndYear
+		}
 		startRange := strconv.Itoa(startYear)
 		endRange := strconv.Itoa(endYear)
+
 		filename := fmt.Sprintf("%s_combined_%s-%s.json", baseFilename, startRange, endRange)
 		output, err := json.MarshalIndent(allTracksData, "", "  ")
 		if err != nil {
