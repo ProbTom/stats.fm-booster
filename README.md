@@ -33,6 +33,7 @@ I highly recommend using the discord bot if you dont care about bulk mode.
    git clone https://github.com/ProbTom/stats.fm-booster
    cd stats.fm-booster
    ```
+or download it as zip 
 
 2. **Run the Program**:
    ```bash
@@ -86,10 +87,11 @@ I highly recommend using the discord bot if you dont care about bulk mode.
 
 ---
 
-## Contact
+## Contact & Support
 
 - [Discord](https://discord.com/users/229396464848076800)
 - Telegram [@ProbTom](https://t.me/ProbTom)
+- [Donations](https://paypal.me/tomloison)
 
 ---
 
