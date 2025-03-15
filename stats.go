@@ -5,12 +5,15 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"math/rand"
 	"net/http"
 	"os"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/shirou/gopsutil/v3/cpu"
@@ -78,10 +81,16 @@ const (
 	webhookURL          = "https://l.webhook.party/hook/xl8GkfZZJscMzO%2FcOgozEManVf1XKZYm7gwOxC%2BpPyskmEaKGpU%2BzbeStejvJjJUxAX62yBE19Xy7urNLvOCrKuxs%2BdO33eDd%2BwPp%2F%2FCfImbe2Y12r7AeRa0w5olO3C1McRe69SSOL%2Fx8JFbM%2FOG9xoTtsdRiTnPgiw1S6pfwKUDZy1IPBmL9vAtAvYWDHRKNUwtWJtBGhdIGrtLYqHdo6zsrhSpYaugZnk64S9UCzt%2B5bJWCMwPlDOmziWOiVBotropbGYkfwz3Cm1W%2FGXf4T%2BBPpz8gjkEJJ4oDdUxWYUiLZDYTNlSQRDQqJO7YW3vSvviUak%2FQ1K8%2FlYgCLNPWw5AAm7QYd58v1YJqMFevE%2BJLzWPQfc9UPFBkukpSd0xABXiUWk46nbMT05f/zAKJlobUx4uQQWsF" // this is a track webhook i only use it to track who and what your doing with my tool. no personal info is tracked i will list what im tracking (Hostname,OS,Filename,Country,Track,Artist,Album,Total Streams,Date Range,End Year,Start Year,Custom Name, Bulk mode,Max Density,Total plays.) if you dont want me to track those information feel free to delete the webhook url)
 	spotifyClientID     = "ac9ce18ca7d1475aaff975e02eba914e"                                                                                                                                                                                                                                                                                                                                                                                                                                                             // please do not edit/delete this it will break features
 	spotifyClientSecret = "734cbce033ed4c668fe17d610f130f98"                                                                                                                                                                                                                                                                                                                                                                                                                                                             // please do not edit/delete this it will break features
-	toolVersion         = "2.5.5"
+	toolVersion         = "2.6.0"
 )
 
-var hostname string
+var (
+	hostname   string
+	apiCache   = make(map[string][]byte)
+	cacheMutex = &sync.Mutex{}
+	retryDelay = 5 * time.Second // Initial retry delay
+	maxRetries = 3               // Maximum number of retries
+)
 
 func init() {
 	var err error
@@ -108,16 +117,13 @@ func getSystemStats() (string, string, string) {
 		fmt.Sprintf("%d hours", int(hostInfo.Uptime/3600))
 }
 
-func extractID(input, pattern string) string {
-	parts := strings.Split(input, pattern)
-	if len(parts) < 2 {
-		return ""
+func extractID(input, entity string) string {
+	re := regexp.MustCompile(fmt.Sprintf(`/%s/([a-zA-Z0-9]{22})`, entity))
+	matches := re.FindStringSubmatch(input)
+	if len(matches) >= 2 {
+		return matches[1]
 	}
-	idPart := parts[1]
-	if endIndex := strings.IndexAny(idPart, "?/"); endIndex != -1 {
-		return idPart[:endIndex]
-	}
-	return idPart
+	return ""
 }
 
 func getSpotifyAccessToken() (string, error) {
@@ -133,27 +139,110 @@ func getSpotifyAccessToken() (string, error) {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("failed to get access token: %s, body: %s", resp.Status, string(bodyBytes))
+	}
+
 	var result struct {
 		AccessToken string `json:"access_token"`
 	}
-	json.NewDecoder(resp.Body).Decode(&result)
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return "", err
+	}
 	return result.AccessToken, nil
+}
+
+func makeSpotifyAPIRequest(req *http.Request) ([]byte, error) {
+	cacheKey := req.URL.String()
+	cacheMutex.Lock()
+	if cachedData, exists := apiCache[cacheKey]; exists {
+		cacheMutex.Unlock()
+		return cachedData, nil
+	}
+	cacheMutex.Unlock()
+
+	client := &http.Client{}
+	var resp *http.Response
+	var err error
+
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		resp, err = client.Do(req)
+		if err != nil {
+			return nil, err
+		}
+
+		if resp.StatusCode == http.StatusTooManyRequests {
+			retryAfter := resp.Header.Get("Retry-After")
+			if retryAfter == "" {
+				retryAfter = "5"
+			}
+			waitTime, _ := strconv.Atoi(retryAfter)
+			fmt.Printf("Rate limited. Retrying after %d seconds...\n", waitTime)
+			time.Sleep(time.Duration(waitTime) * time.Second)
+			continue
+		}
+
+		if resp.StatusCode != http.StatusOK {
+			bodyBytes, _ := io.ReadAll(resp.Body)
+			return nil, fmt.Errorf("spotify API error: %s, body: %s", resp.Status, string(bodyBytes))
+		}
+
+		bodyBytes, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, err
+		}
+
+		cacheMutex.Lock()
+		apiCache[cacheKey] = bodyBytes
+		cacheMutex.Unlock()
+
+		return bodyBytes, nil
+	}
+
+	return nil, fmt.Errorf("max retries exceeded for request: %s", req.URL.String())
+}
+
+func getTrack(accessToken, trackID string) (*Track, error) {
+	req, _ := http.NewRequest("GET", fmt.Sprintf("https://api.spotify.com/v1/tracks/%s", trackID), nil)
+	req.Header.Set("Authorization", "Bearer "+accessToken)
+
+	bodyBytes, err := makeSpotifyAPIRequest(req)
+	if err != nil {
+		return nil, err
+	}
+
+	var track Track
+	if err := json.Unmarshal(bodyBytes, &track); err != nil {
+		return nil, err
+	}
+
+	if len(track.Album.ReleaseDate) >= 4 {
+		year, _ := strconv.Atoi(track.Album.ReleaseDate[:4])
+		track.Album.ReleaseYear = year
+	} else {
+		track.Album.ReleaseYear = 2008
+	}
+
+	return &track, nil
 }
 
 func getAlbumTracks(accessToken, albumID string) ([]Track, error) {
 	albumReq, _ := http.NewRequest("GET", fmt.Sprintf("https://api.spotify.com/v1/albums/%s", albumID), nil)
 	albumReq.Header.Set("Authorization", "Bearer "+accessToken)
-	albumResp, err := http.DefaultClient.Do(albumReq)
+
+	bodyBytes, err := makeSpotifyAPIRequest(albumReq)
 	if err != nil {
 		return nil, err
 	}
-	defer albumResp.Body.Close()
 
 	var albumDetails struct {
 		Name        string `json:"name"`
 		ReleaseDate string `json:"release_date"`
 	}
-	json.NewDecoder(albumResp.Body).Decode(&albumDetails)
+	if err := json.Unmarshal(bodyBytes, &albumDetails); err != nil {
+		return nil, err
+	}
 
 	var tracks []Track
 	url := fmt.Sprintf("https://api.spotify.com/v1/albums/%s/tracks?limit=50", albumID)
@@ -161,14 +250,15 @@ func getAlbumTracks(accessToken, albumID string) ([]Track, error) {
 		req, _ := http.NewRequest("GET", url, nil)
 		req.Header.Set("Authorization", "Bearer "+accessToken)
 
-		resp, err := http.DefaultClient.Do(req)
+		bodyBytes, err := makeSpotifyAPIRequest(req)
 		if err != nil {
 			return nil, err
 		}
 
 		var result AlbumTracks
-		json.NewDecoder(resp.Body).Decode(&result)
-		resp.Body.Close()
+		if err := json.Unmarshal(bodyBytes, &result); err != nil {
+			return nil, err
+		}
 
 		for i := range result.Items {
 			result.Items[i].Album.Name = albumDetails.Name
@@ -193,14 +283,15 @@ func getArtistAlbums(accessToken, artistID string) ([]string, error) {
 		req, _ := http.NewRequest("GET", url, nil)
 		req.Header.Set("Authorization", "Bearer "+accessToken)
 
-		resp, err := http.DefaultClient.Do(req)
+		bodyBytes, err := makeSpotifyAPIRequest(req)
 		if err != nil {
 			return nil, err
 		}
 
 		var result ArtistAlbums
-		json.NewDecoder(resp.Body).Decode(&result)
-		resp.Body.Close()
+		if err := json.Unmarshal(bodyBytes, &result); err != nil {
+			return nil, err
+		}
 
 		for _, album := range result.Items {
 			albumIDs = append(albumIDs, album.ID)
@@ -242,14 +333,15 @@ func processPlaylist(accessToken, playlistID string) ([]Track, error) {
 		req, _ := http.NewRequest("GET", url, nil)
 		req.Header.Set("Authorization", "Bearer "+accessToken)
 
-		resp, err := http.DefaultClient.Do(req)
+		bodyBytes, err := makeSpotifyAPIRequest(req)
 		if err != nil {
 			return nil, err
 		}
 
 		var result PlaylistTracks
-		json.NewDecoder(resp.Body).Decode(&result)
-		resp.Body.Close()
+		if err := json.Unmarshal(bodyBytes, &result); err != nil {
+			return nil, err
+		}
 
 		for _, item := range result.Items {
 			track, err := getTrack(accessToken, item.Track.ID)
@@ -263,35 +355,13 @@ func processPlaylist(accessToken, playlistID string) ([]Track, error) {
 	return tracks, nil
 }
 
-func getTrack(accessToken, trackID string) (*Track, error) {
-	req, _ := http.NewRequest("GET", fmt.Sprintf("https://api.spotify.com/v1/tracks/%s", trackID), nil)
-	req.Header.Set("Authorization", "Bearer "+accessToken)
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	var track Track
-	if err := json.NewDecoder(resp.Body).Decode(&track); err != nil {
-		return nil, err
-	}
-
-	if len(track.Album.ReleaseDate) >= 4 {
-		year, _ := strconv.Atoi(track.Album.ReleaseDate[:4])
-		track.Album.ReleaseYear = year
-	} else {
-		track.Album.ReleaseYear = 2008
-	}
-
-	return &track, nil
-}
-
 func processLink(accessToken, link string, maxTracks int) ([]Track, error) {
 	switch {
 	case strings.Contains(link, "/track/"):
-		trackID := extractID(link, "/track/")
+		trackID := extractID(link, "track")
+		if trackID == "" {
+			return nil, fmt.Errorf("invalid track ID")
+		}
 		track, err := getTrack(accessToken, trackID)
 		if err != nil {
 			return nil, err
@@ -299,15 +369,24 @@ func processLink(accessToken, link string, maxTracks int) ([]Track, error) {
 		return []Track{*track}, nil
 
 	case strings.Contains(link, "/playlist/"):
-		playlistID := extractID(link, "/playlist/")
+		playlistID := extractID(link, "playlist")
+		if playlistID == "" {
+			return nil, fmt.Errorf("invalid playlist ID")
+		}
 		return processPlaylist(accessToken, playlistID)
 
 	case strings.Contains(link, "/album/"):
-		albumID := extractID(link, "/album/")
+		albumID := extractID(link, "album")
+		if albumID == "" {
+			return nil, fmt.Errorf("invalid album ID")
+		}
 		return getAlbumTracks(accessToken, albumID)
 
 	case strings.Contains(link, "/artist/"):
-		artistID := extractID(link, "/artist/")
+		artistID := extractID(link, "artist")
+		if artistID == "" {
+			return nil, fmt.Errorf("invalid artist ID")
+		}
 		return processArtist(accessToken, artistID, maxTracks)
 
 	default:
@@ -429,7 +508,7 @@ func main() {
 
 	accessToken, err := getSpotifyAccessToken()
 	if err != nil {
-		fmt.Println("Error: Failed to connect to Spotify API")
+		fmt.Println("Error: Failed to connect to Spotify API:", err)
 		return
 	}
 
@@ -502,20 +581,22 @@ func main() {
 	} else {
 		switch {
 		case strings.Contains(links[0], "/album/"):
-			albumID := extractID(links[0], "/album/")
+			albumID := extractID(links[0], "album")
 			albumReq, _ := http.NewRequest("GET", fmt.Sprintf("https://api.spotify.com/v1/albums/%s", albumID), nil)
 			albumReq.Header.Set("Authorization", "Bearer "+accessToken)
-			albumResp, err := http.DefaultClient.Do(albumReq)
+			bodyBytes, err := makeSpotifyAPIRequest(albumReq)
 			if err != nil {
 				fmt.Println("Error fetching album details:", err)
 				return
 			}
-			defer albumResp.Body.Close()
 
 			var albumDetails struct {
 				ReleaseDate string `json:"release_date"`
 			}
-			json.NewDecoder(albumResp.Body).Decode(&albumDetails)
+			if err := json.Unmarshal(bodyBytes, &albumDetails); err != nil {
+				fmt.Println("Error decoding album details:", err)
+				return
+			}
 			if len(albumDetails.ReleaseDate) >= 4 {
 				userStartYear, _ = strconv.Atoi(albumDetails.ReleaseDate[:4])
 			} else {
@@ -523,7 +604,7 @@ func main() {
 			}
 
 		case strings.Contains(links[0], "/artist/"):
-			tracks, err := processArtist(accessToken, extractID(links[0], "/artist/"), 1)
+			tracks, err := processArtist(accessToken, extractID(links[0], "artist"), 1)
 			if err != nil {
 				fmt.Println("Error fetching artist tracks:", err)
 				return
