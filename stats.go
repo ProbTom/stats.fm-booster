@@ -88,8 +88,8 @@ var (
 	hostname   string
 	apiCache   = make(map[string][]byte)
 	cacheMutex = &sync.Mutex{}
-	retryDelay = 5 * time.Second // Initial retry delay
-	maxRetries = 3               // Maximum number of retries
+	retryDelay = 5 * time.Second 
+	maxRetries = 3 
 )
 
 func init() {
@@ -744,4 +744,7 @@ func main() {
 			sendUserTracking(allTracks[0], totalPlays, fmt.Sprintf("%d", startYear), fmt.Sprintf("%d", endYear), filename, options)
 		}
 	}
+
+
+// join discord.gg/fuckstats
 }
