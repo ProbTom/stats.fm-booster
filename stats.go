@@ -533,11 +533,16 @@ func main() {
 
 	var maxTracks int
 	if strings.Contains(links[0], "/artist/") {
-		fmt.Print("Enter the number of songs to generate (e.g., 50): ")
+		fmt.Print("Enter the number of songs to generate (e.g., 50 or 'max' for all): ")
 		scanner.Scan()
-		maxTracks, _ = strconv.Atoi(scanner.Text())
-		if maxTracks <= 0 {
-			maxTracks = 50
+		input := scanner.Text()
+		if strings.ToLower(input) == "max" {
+			maxTracks = int(^uint(0) >> 1) // Set to the maximum possible integer value
+		} else {
+			maxTracks, _ = strconv.Atoi(input)
+			if maxTracks <= 0 {
+				maxTracks = 50
+			}
 		}
 	} else {
 		maxTracks = 1000
