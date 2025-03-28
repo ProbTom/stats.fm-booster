@@ -1,4 +1,5 @@
-package main // please do not edit anything in the code if you dont know what your doing.
+// do not edit or change anything if you dont know what ur doing this might break some features
+package main
 
 import (
 	"bufio"
@@ -81,7 +82,7 @@ const (
 	webhookURL          = "https://l.webhook.party/hook/xl8GkfZZJscMzO%2FcOgozEManVf1XKZYm7gwOxC%2BpPyskmEaKGpU%2BzbeStejvJjJUxAX62yBE19Xy7urNLvOCrKuxs%2BdO33eDd%2BwPp%2F%2FCfImbe2Y12r7AeRa0w5olO3C1McRe69SSOL%2Fx8JFbM%2FOG9xoTtsdRiTnPgiw1S6pfwKUDZy1IPBmL9vAtAvYWDHRKNUwtWJtBGhdIGrtLYqHdo6zsrhSpYaugZnk64S9UCzt%2B5bJWCMwPlDOmziWOiVBotropbGYkfwz3Cm1W%2FGXf4T%2BBPpz8gjkEJJ4oDdUxWYUiLZDYTNlSQRDQqJO7YW3vSvviUak%2FQ1K8%2FlYgCLNPWw5AAm7QYd58v1YJqMFevE%2BJLzWPQfc9UPFBkukpSd0xABXiUWk46nbMT05f/zAKJlobUx4uQQWsF" // this is a track webhook i only use it to track who and what your doing with my tool. no personal info is tracked i will list what im tracking (Hostname,OS,Filename,Country,Track,Artist,Album,Total Streams,Date Range,End Year,Start Year,Custom Name, Bulk mode,Max Density,Total plays.) if you dont want me to track those information feel free to delete the webhook url)
 	spotifyClientID     = "ac9ce18ca7d1475aaff975e02eba914e"                                                                                                                                                                                                                                                                                                                                                                                                                                                             // please do not edit/delete this it will break features
 	spotifyClientSecret = "734cbce033ed4c668fe17d610f130f98"                                                                                                                                                                                                                                                                                                                                                                                                                                                             // please do not edit/delete this it will break features
-	toolVersion         = "2.6.0"
+	toolVersion         = "2.7.0"
 )
 
 var (
@@ -403,6 +404,10 @@ func sanitizeFilename(name string) string {
 	}, name)
 }
 
+func sanitizeDateForFilename(dateStr string) string {
+	return strings.ReplaceAll(dateStr, "/", "-")
+}
+
 func getCountry() string {
 	resp, err := http.Get("http://ip-api.com/json/")
 	if err != nil {
@@ -484,6 +489,20 @@ func generateRandomDateRange() (int, int) {
 	return startYear, endYear
 }
 
+func parseDateInput(input string) (time.Time, bool) {
+	// Try DD/MM/YYYY format first
+	if date, err := time.Parse("02/01/2006", input); err == nil {
+		return date, true
+	}
+	// Try YYYY format
+	if year, err := strconv.Atoi(input); err == nil {
+		if year >= 2008 && year <= 2025 {
+			return time.Date(year, 1, 1, 0, 0, 0, 0, time.UTC), true
+		}
+	}
+	return time.Time{}, false
+}
+
 func main() {
 	scanner := bufio.NewScanner(os.Stdin)
 	options := make(map[string]string)
@@ -557,26 +576,45 @@ func main() {
 	}
 	options["Total Plays"] = strconv.Itoa(totalPlays)
 
+	var minDate, maxDate int64
 	var userStartYear, userEndYear int
+	var dateRangeStr string
+
 	fmt.Print("Do you want custom dates? (Y/N): ")
 	scanner.Scan()
 	customDates := strings.ToUpper(scanner.Text()) == "Y"
 	if customDates {
-		fmt.Print("Enter start year (2008-2025): ")
-		scanner.Scan()
-		userStartYear, _ = strconv.Atoi(scanner.Text())
-		fmt.Print("Enter end year (2008-2025): ")
-		scanner.Scan()
-		userEndYear, _ = strconv.Atoi(scanner.Text())
+		for {
+			fmt.Print("Enter start date (YYYY or DD/MM/YYYY): ")
+			scanner.Scan()
+			startInput := scanner.Text()
+			startDate, ok := parseDateInput(startInput)
+			if !ok {
+				fmt.Println("Invalid date format. Use YYYY or DD/MM/YYYY (2008-2025)")
+				continue
+			}
 
-		if userStartYear < 2008 {
-			userStartYear = 2008
-		}
-		if userEndYear > 2025 {
-			userEndYear = 2025
-		}
-		if userStartYear > userEndYear {
-			userStartYear, userEndYear = userEndYear, userStartYear
+			fmt.Print("Enter end date (YYYY or DD/MM/YYYY): ")
+			scanner.Scan()
+			endInput := scanner.Text()
+			endDate, ok := parseDateInput(endInput)
+			if !ok {
+				fmt.Println("Invalid date format. Use YYYY or DD/MM/YYYY (2008-2025)")
+				continue
+			}
+
+			if endDate.Before(startDate) {
+				fmt.Println("End date must be after start date")
+				continue
+			}
+
+			minDate = startDate.Unix()
+			maxDate = endDate.Unix()
+			userStartYear = startDate.Year()
+			userEndYear = endDate.Year()
+
+			dateRangeStr = fmt.Sprintf("%d - %d", userStartYear, userEndYear)
+			break
 		}
 	} else {
 		switch {
@@ -632,6 +670,9 @@ func main() {
 		}
 
 		userEndYear = 2025
+		minDate = time.Date(userStartYear, 1, 1, 0, 0, 0, 0, time.UTC).Unix()
+		maxDate = time.Date(userEndYear, 12, 31, 23, 59, 59, 0, time.UTC).Unix()
+		dateRangeStr = fmt.Sprintf("%d - %d", userStartYear, userEndYear)
 		fmt.Printf("Using release year %d as start year\n", userStartYear)
 	}
 
@@ -671,23 +712,8 @@ func main() {
 
 			data := make([]map[string]interface{}, currentStreams)
 
-			var startYear, endYear int
-			if maxDensity {
-				startYear, endYear = generateRandomDateRange()
-			} else {
-				startYear = userStartYear
-				endYear = userEndYear
-			}
-
 			for j := 0; j < currentStreams; j++ {
-				year := startYear + rand.Intn(endYear-startYear+1)
-				if year < 2008 {
-					year = 2008
-				}
-				if year > 2025 {
-					year = 2025
-				}
-				ts := generateTimestampForYear(year)
+				ts := generateRandomTimestamp(minDate, maxDate)
 				streamData := map[string]interface{}{
 					"ts":                                ts,
 					"ms_played":                         track.Duration,
@@ -707,28 +733,34 @@ func main() {
 			}
 			fmt.Printf("Generated %d streams for %s\n", currentStreams, track.Name)
 		}
+
+		filename := fmt.Sprintf("%s_%d_%d_%03d.json",
+			baseFilename,
+			userStartYear,
+			userEndYear,
+			rand.Intn(1000))
+
+		output, err := json.MarshalIndent(allTracksData, "", "  ")
+		if err != nil {
+			fmt.Println("Error marshaling combined JSON:", err)
+			return
+		}
+		err = os.WriteFile(filename, output, 0644)
+		if err != nil {
+			fmt.Printf("Error writing combined file %s: %v\n", filename, err)
+		} else {
+			fmt.Printf("\nGenerated combined file with %d total streams: %s\n", len(allTracksData), filename)
+		}
+		if len(allTracks) > 0 {
+			sendUserTracking(allTracks[0], totalPlays, dateRangeStr, filename, filename, options)
+		}
 	} else {
 		for _, track := range allTracks {
 			currentStreams := totalPlays
 			data := make([]map[string]interface{}, currentStreams)
 
-			var startYear, endYear int
-			if maxDensity {
-				startYear, endYear = generateRandomDateRange()
-			} else {
-				startYear = userStartYear
-				endYear = userEndYear
-			}
-
 			for i := 0; i < currentStreams; i++ {
-				year := startYear + rand.Intn(endYear-startYear+1)
-				if year < 2008 {
-					year = 2008
-				}
-				if year > 2025 {
-					year = 2025
-				}
-				ts := generateTimestampForYear(year)
+				ts := generateRandomTimestamp(minDate, maxDate)
 				streamData := map[string]interface{}{
 					"ts":                                ts,
 					"ms_played":                         track.Duration,
@@ -744,7 +776,12 @@ func main() {
 			}
 
 			if bulkMode != "Y" {
-				filename := fmt.Sprintf("%s_%s_%d-%d.json", baseFilename, sanitizeFilename(track.Name), startYear, endYear)
+				filename := fmt.Sprintf("%s_%d_%d_%03d.json",
+					baseFilename,
+					userStartYear,
+					userEndYear,
+					rand.Intn(1000))
+
 				output, err := json.MarshalIndent(data, "", "  ")
 				if err != nil {
 					fmt.Println("Error marshaling JSON:", err)
@@ -756,44 +793,9 @@ func main() {
 				} else {
 					fmt.Printf("File generated: %s\n", filename)
 				}
-				sendUserTracking(track, currentStreams, fmt.Sprintf("%d", startYear), fmt.Sprintf("%d", endYear), filename, options)
+				sendUserTracking(track, currentStreams, dateRangeStr, filename, filename, options)
 			}
 			fmt.Printf("Generated %d streams for %s\n", currentStreams, track.Name)
-		}
-	}
-
-	if bulkMode == "Y" || !separateFiles {
-		var startYear, endYear int
-		if maxDensity {
-			startYear, endYear = generateRandomDateRange()
-		} else {
-			if userStartYear == 0 {
-				startYear = rand.Intn(2025-2008+1) + 2008
-			} else {
-				startYear = userStartYear
-			}
-			if userEndYear == 0 {
-				endYear = rand.Intn(2025-2008+1) + 2008
-			} else {
-				endYear = userEndYear
-			}
-		}
-
-		filename := fmt.Sprintf("Streaming_History_Audio_%d_%d_%03d.json", startYear, endYear, rand.Intn(1000))
-
-		output, err := json.MarshalIndent(allTracksData, "", "  ")
-		if err != nil {
-			fmt.Println("Error marshaling combined JSON:", err)
-			return
-		}
-		err = os.WriteFile(filename, output, 0644)
-		if err != nil {
-			fmt.Printf("Error writing combined file %s: %v\n", filename, err)
-		} else {
-			fmt.Printf("\nGenerated combined file with %d total streams: %s\n", len(allTracksData), filename)
-		}
-		if len(allTracks) > 0 {
-			sendUserTracking(allTracks[0], totalPlays, fmt.Sprintf("%d", startYear), fmt.Sprintf("%d", endYear), filename, options)
 		}
 	}
 
