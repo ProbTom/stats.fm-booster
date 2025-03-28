@@ -88,8 +88,8 @@ var (
 	hostname   string
 	apiCache   = make(map[string][]byte)
 	cacheMutex = &sync.Mutex{}
-	retryDelay = 5 * time.Second 
-	maxRetries = 3 
+	retryDelay = 5 * time.Second
+	maxRetries = 3
 )
 
 func init() {
@@ -658,43 +658,92 @@ func main() {
 	}
 
 	var allTracksData []map[string]interface{}
-	for _, track := range allTracks {
-		currentStreams := totalPlays
-		data := make([]map[string]interface{}, currentStreams)
+	if !separateFiles {
+		trackCount := len(allTracks)
+		baseStreams := totalPlays / trackCount
+		remainder := totalPlays % trackCount
 
-		var startYear, endYear int
-		if maxDensity {
-			startYear, endYear = generateRandomDateRange()
-		} else {
-			startYear = userStartYear
-			endYear = userEndYear
+		for i, track := range allTracks {
+			currentStreams := baseStreams
+			if i < remainder {
+				currentStreams++
+			}
+
+			data := make([]map[string]interface{}, currentStreams)
+
+			var startYear, endYear int
+			if maxDensity {
+				startYear, endYear = generateRandomDateRange()
+			} else {
+				startYear = userStartYear
+				endYear = userEndYear
+			}
+
+			for j := 0; j < currentStreams; j++ {
+				year := startYear + rand.Intn(endYear-startYear+1)
+				if year < 2008 {
+					year = 2008
+				}
+				if year > 2025 {
+					year = 2025
+				}
+				ts := generateTimestampForYear(year)
+				streamData := map[string]interface{}{
+					"ts":                                ts,
+					"ms_played":                         track.Duration,
+					"master_metadata_track_name":        track.Name,
+					"master_metadata_album_artist_name": track.Artists[0].Name,
+					"master_metadata_album_album_name":  track.Album.Name,
+					"spotify_track_uri":                 "spotify:track:" + track.ID,
+				}
+				data[j] = streamData
+				if bulkMode == "Y" {
+					allTracksData = append(allTracksData, streamData)
+				}
+			}
+
+			if bulkMode != "Y" {
+				allTracksData = append(allTracksData, data...)
+			}
+			fmt.Printf("Generated %d streams for %s\n", currentStreams, track.Name)
 		}
+	} else {
+		for _, track := range allTracks {
+			currentStreams := totalPlays
+			data := make([]map[string]interface{}, currentStreams)
 
-		for i := 0; i < currentStreams; i++ {
-			year := startYear + rand.Intn(endYear-startYear+1)
-			if year < 2008 {
-				year = 2008
+			var startYear, endYear int
+			if maxDensity {
+				startYear, endYear = generateRandomDateRange()
+			} else {
+				startYear = userStartYear
+				endYear = userEndYear
 			}
-			if year > 2025 {
-				year = 2025
-			}
-			ts := generateTimestampForYear(year)
-			streamData := map[string]interface{}{
-				"ts":                                ts,
-				"ms_played":                         track.Duration,
-				"master_metadata_track_name":        track.Name,
-				"master_metadata_album_artist_name": track.Artists[0].Name,
-				"master_metadata_album_album_name":  track.Album.Name,
-				"spotify_track_uri":                 "spotify:track:" + track.ID,
-			}
-			data[i] = streamData
-			if bulkMode == "Y" {
-				allTracksData = append(allTracksData, streamData)
-			}
-		}
 
-		if bulkMode != "Y" {
-			if separateFiles {
+			for i := 0; i < currentStreams; i++ {
+				year := startYear + rand.Intn(endYear-startYear+1)
+				if year < 2008 {
+					year = 2008
+				}
+				if year > 2025 {
+					year = 2025
+				}
+				ts := generateTimestampForYear(year)
+				streamData := map[string]interface{}{
+					"ts":                                ts,
+					"ms_played":                         track.Duration,
+					"master_metadata_track_name":        track.Name,
+					"master_metadata_album_artist_name": track.Artists[0].Name,
+					"master_metadata_album_album_name":  track.Album.Name,
+					"spotify_track_uri":                 "spotify:track:" + track.ID,
+				}
+				data[i] = streamData
+				if bulkMode == "Y" {
+					allTracksData = append(allTracksData, streamData)
+				}
+			}
+
+			if bulkMode != "Y" {
 				filename := fmt.Sprintf("%s_%s_%d-%d.json", baseFilename, sanitizeFilename(track.Name), startYear, endYear)
 				output, err := json.MarshalIndent(data, "", "  ")
 				if err != nil {
@@ -708,11 +757,9 @@ func main() {
 					fmt.Printf("File generated: %s\n", filename)
 				}
 				sendUserTracking(track, currentStreams, fmt.Sprintf("%d", startYear), fmt.Sprintf("%d", endYear), filename, options)
-			} else {
-				allTracksData = append(allTracksData, data...)
 			}
+			fmt.Printf("Generated %d streams for %s\n", currentStreams, track.Name)
 		}
-		fmt.Printf("Generated %d streams for %s\n", currentStreams, track.Name)
 	}
 
 	if bulkMode == "Y" || !separateFiles {
@@ -720,14 +767,19 @@ func main() {
 		if maxDensity {
 			startYear, endYear = generateRandomDateRange()
 		} else {
-			startYear = userStartYear
-			endYear = userEndYear
+			if userStartYear == 0 {
+				startYear = rand.Intn(2025-2008+1) + 2008
+			} else {
+				startYear = userStartYear
+			}
+			if userEndYear == 0 {
+				endYear = rand.Intn(2025-2008+1) + 2008
+			} else {
+				endYear = userEndYear
+			}
 		}
 
-		filename := fmt.Sprintf("%s_%d-%d.json", baseFilename, startYear, endYear)
-		if !strings.Contains(links[0], "/track/") {
-			filename = fmt.Sprintf("%s_combined_%d-%d.json", baseFilename, startYear, endYear)
-		}
+		filename := fmt.Sprintf("Streaming_History_Audio_%d_%d_%03d.json", startYear, endYear, rand.Intn(1000))
 
 		output, err := json.MarshalIndent(allTracksData, "", "  ")
 		if err != nil {
@@ -745,6 +797,5 @@ func main() {
 		}
 	}
 
-
-// join discord.gg/fuckstats
+	// join discord.gg/fuckstats
 }
