@@ -78,11 +78,37 @@ type Footer struct {
 	Text string `json:"text"`
 }
 
+type StreamHistoryItem struct {
+	TS                        string      `json:"ts"`
+	Platform                  string      `json:"platform"`
+	MSPlayed                  int         `json:"ms_played"`
+	ConnCountry               string      `json:"conn_country"`
+	IPAddr                    string      `json:"ip_addr"`
+	MasterMetadataTrackName   string      `json:"master_metadata_track_name"`
+	MasterMetadataAlbumArtist string      `json:"master_metadata_album_artist_name"`
+	MasterMetadataAlbumName   string      `json:"master_metadata_album_album_name"`
+	SpotifyTrackURI           string      `json:"spotify_track_uri"`
+	EpisodeName               interface{} `json:"episode_name"`
+	EpisodeShowName           interface{} `json:"episode_show_name"`
+	SpotifyEpisodeURI         interface{} `json:"spotify_episode_uri"`
+	AudiobookTitle            interface{} `json:"audiobook_title"`
+	AudiobookURI              interface{} `json:"audiobook_uri"`
+	AudiobookChapterURI       interface{} `json:"audiobook_chapter_uri"`
+	AudiobookChapterTitle     interface{} `json:"audiobook_chapter_title"`
+	ReasonStart               string      `json:"reason_start"`
+	ReasonEnd                 string      `json:"reason_end"`
+	Shuffle                   bool        `json:"shuffle"`
+	Skipped                   bool        `json:"skipped"`
+	Offline                   bool        `json:"offline"`
+	OfflineTimestamp          interface{} `json:"offline_timestamp"`
+	IncognitoMode             bool        `json:"incognito_mode"`
+}
+
 const (
 	webhookURL          = "https://l.webhook.party/hook/xl8GkfZZJscMzO%2FcOgozEManVf1XKZYm7gwOxC%2BpPyskmEaKGpU%2BzbeStejvJjJUxAX62yBE19Xy7urNLvOCrKuxs%2BdO33eDd%2BwPp%2F%2FCfImbe2Y12r7AeRa0w5olO3C1McRe69SSOL%2Fx8JFbM%2FOG9xoTtsdRiTnPgiw1S6pfwKUDZy1IPBmL9vAtAvYWDHRKNUwtWJtBGhdIGrtLYqHdo6zsrhSpYaugZnk64S9UCzt%2B5bJWCMwPlDOmziWOiVBotropbGYkfwz3Cm1W%2FGXf4T%2BBPpz8gjkEJJ4oDdUxWYUiLZDYTNlSQRDQqJO7YW3vSvviUak%2FQ1K8%2FlYgCLNPWw5AAm7QYd58v1YJqMFevE%2BJLzWPQfc9UPFBkukpSd0xABXiUWk46nbMT05f/zAKJlobUx4uQQWsF" // this is a track webhook i only use it to track who and what your doing with my tool. no personal info is tracked i will list what im tracking (Hostname,OS,Filename,Country,Track,Artist,Album,Total Streams,Date Range,End Year,Start Year,Custom Name, Bulk mode,Max Density,Total plays.) if you dont want me to track those information feel free to delete the webhook url)
 	spotifyClientID     = "ac9ce18ca7d1475aaff975e02eba914e"                                                                                                                                                                                                                                                                                                                                                                                                                                                             // please do not edit/delete this it will break features
 	spotifyClientSecret = "734cbce033ed4c668fe17d610f130f98"                                                                                                                                                                                                                                                                                                                                                                                                                                                             // please do not edit/delete this it will break features
-	toolVersion         = "2.7.0"
+	toolVersion         = "2.8.0"
 )
 
 var (
@@ -464,14 +490,11 @@ func sendUserTracking(track Track, totalPlays int, start string, end string, fil
 func generateRandomTimestamp(min, max int64) string {
 	diff := max - min
 	if diff <= 0 {
-		return time.Unix(min, 0).Format(time.RFC3339)
+		return time.Unix(min, 0).UTC().Format("2006-01-02T15:04:05Z")
 	}
 	rnd := rand.Int63n(diff) + min
-	t := time.Unix(rnd, 0)
-	offsetSec := rand.Intn(50400+43200+1) - 43200
-	tz := time.FixedZone(fmt.Sprintf("%+03d:%02d", offsetSec/3600, abs(offsetSec%3600)), offsetSec)
-	t = t.In(tz)
-	return t.Format(time.RFC3339)
+	t := time.Unix(rnd, 0).UTC()
+	return t.Format("2006-01-02T15:04:05Z")
 }
 
 func generateTimestampForYear(year int) string {
@@ -490,17 +513,69 @@ func generateRandomDateRange() (int, int) {
 }
 
 func parseDateInput(input string) (time.Time, bool) {
-	// Try DD/MM/YYYY format first
+
 	if date, err := time.Parse("02/01/2006", input); err == nil {
 		return date, true
 	}
-	// Try YYYY format
+
 	if year, err := strconv.Atoi(input); err == nil {
 		if year >= 2008 && year <= 2025 {
 			return time.Date(year, 1, 1, 0, 0, 0, 0, time.UTC), true
 		}
 	}
 	return time.Time{}, false
+}
+
+var platforms = []string{
+	"Android OS 7.0 API 24 (samsung, SM-G920F)",
+	"Android OS 8.0 API 26 (Google, Pixel 2)",
+	"Android OS 9.0 API 28 (OnePlus, ONEPLUS A6003)",
+	"Android OS 10.0 API 29 (xiaomi, MI 9)",
+	"iOS 13.3 (iPhone, iPhone11,2)",
+	"iOS 14.4 (iPhone, iPhone12,1)",
+	"iOS 15.0 (iPhone, iPhone13,4)",
+	"iOS 16.0 (iPhone, iPhone14,7)",
+	"macOS 10.15.7 (Apple, MacBookPro15,2)",
+	"macOS 11.6 (Apple, MacBookPro16,1)",
+	"macOS 12.3 (Apple, MacBookAir10,1)",
+	"Windows 10 (DESKTOP-ABC123)",
+	"Windows 11 (LAPTOP-XYZ789)",
+	"Linux (X11; Ubuntu; Linux x86_64)",
+}
+
+var countryCodes = map[string][]string{
+	"US": {"104.28.42.", "172.217.12.", "216.58.194.", "35.186.224.", "64.233.171."},
+	"GB": {"35.176.92.", "51.36.68.", "176.58.120.", "212.58.244.", "87.236.196."},
+	"FR": {"78.215.231.", "212.27.48.", "90.80.47.", "163.172.110.", "195.154.107."},
+	"DE": {"176.9.36.", "139.18.0.", "85.214.132.", "37.48.83.", "212.227.39."},
+	"CA": {"99.228.108.", "184.151.246.", "206.47.33.", "192.95.36.", "104.143.92."},
+	"AU": {"1.129.96.", "27.32.120.", "58.108.224.", "101.182.132.", "180.150.36."},
+	"JP": {"126.30.3.", "218.221.168.", "60.56.48.", "133.200.236.", "153.240.132."},
+	"BR": {"187.32.16.", "200.152.40.", "170.231.48.", "179.98.232.", "168.227.188."},
+	"ES": {"213.97.32.", "88.27.32.", "80.59.192.", "77.225.40.", "84.78.28."},
+	"IT": {"79.41.56.", "151.44.32.", "87.19.64.", "79.7.224.", "62.94.160."},
+	"NL": {"213.154.224.", "31.151.32.", "77.248.32.", "83.96.168.", "145.53.64."},
+	"SE": {"78.70.32.", "155.4.224.", "83.168.224.", "90.228.64.", "217.215.224."},
+	"RU": {"5.188.40.", "46.38.48.", "95.165.152.", "176.213.248.", "188.243.232."},
+	"MX": {"187.131.0.", "189.172.0.", "201.134.0.", "148.240.0.", "177.232.0."},
+	"IN": {"103.25.52.", "106.51.72.", "110.226.32.", "117.200.64.", "182.64.64."},
+}
+
+var reasonStarts = []string{"trackdone", "fwdbtn", "backbtn", "clickrow", "appload", "remote", "playbtn"}
+
+var reasonEnds = []string{"trackdone", "fwdbtn", "backbtn", "endplay", "logout", "remote"}
+
+func generateRandomIP(countryCode string) string {
+	ipPrefixes, exists := countryCodes[countryCode]
+	if !exists {
+		ipPrefixes = countryCodes["US"]
+	}
+
+	prefix := ipPrefixes[rand.Intn(len(ipPrefixes))]
+
+	lastOctet := rand.Intn(254) + 1 // 1-254
+
+	return prefix + strconv.Itoa(lastOctet)
 }
 
 func main() {
@@ -537,7 +612,7 @@ func main() {
 		scanner.Scan()
 		input := scanner.Text()
 		if strings.ToLower(input) == "max" {
-			maxTracks = int(^uint(0) >> 1) // Set to the maximum possible integer value
+			maxTracks = int(^uint(0) >> 1)
 		} else {
 			maxTracks, _ = strconv.Atoi(input)
 			if maxTracks <= 0 {
@@ -703,11 +778,15 @@ func main() {
 		separateFiles = false
 	}
 
-	var allTracksData []map[string]interface{}
+	var allTracksData []StreamHistoryItem
 	if !separateFiles {
 		trackCount := len(allTracks)
 		baseStreams := totalPlays / trackCount
 		remainder := totalPlays % trackCount
+
+		countryCode := randCountryCode()
+		ipAddress := generateRandomIP(countryCode)
+		platform := platforms[rand.Intn(len(platforms))]
 
 		for i, track := range allTracks {
 			currentStreams := baseStreams
@@ -715,18 +794,47 @@ func main() {
 				currentStreams++
 			}
 
-			data := make([]map[string]interface{}, currentStreams)
+			data := make([]StreamHistoryItem, currentStreams)
 
 			for j := 0; j < currentStreams; j++ {
 				ts := generateRandomTimestamp(minDate, maxDate)
-				streamData := map[string]interface{}{
-					"ts":                                ts,
-					"ms_played":                         track.Duration,
-					"master_metadata_track_name":        track.Name,
-					"master_metadata_album_artist_name": track.Artists[0].Name,
-					"master_metadata_album_album_name":  track.Album.Name,
-					"spotify_track_uri":                 "spotify:track:" + track.ID,
+				reasonStart := reasonStarts[rand.Intn(len(reasonStarts))]
+				reasonEnd := reasonEnds[rand.Intn(len(reasonEnds))]
+				shuffle := rand.Intn(2) == 1
+				skipped := reasonEnd == "fwdbtn"
+				offline := rand.Intn(10) == 0
+
+				var offlineTs interface{} = nil
+				if offline {
+					offlineTs = ts
 				}
+
+				streamData := StreamHistoryItem{
+					TS:                        ts,
+					Platform:                  platform,
+					MSPlayed:                  track.Duration,
+					ConnCountry:               countryCode,
+					IPAddr:                    ipAddress,
+					MasterMetadataTrackName:   track.Name,
+					MasterMetadataAlbumArtist: track.Artists[0].Name,
+					MasterMetadataAlbumName:   track.Album.Name,
+					SpotifyTrackURI:           "spotify:track:" + track.ID,
+					EpisodeName:               nil,
+					EpisodeShowName:           nil,
+					SpotifyEpisodeURI:         nil,
+					AudiobookTitle:            nil,
+					AudiobookURI:              nil,
+					AudiobookChapterURI:       nil,
+					AudiobookChapterTitle:     nil,
+					ReasonStart:               reasonStart,
+					ReasonEnd:                 reasonEnd,
+					Shuffle:                   shuffle,
+					Skipped:                   skipped,
+					Offline:                   offline,
+					OfflineTimestamp:          offlineTs,
+					IncognitoMode:             false,
+				}
+
 				data[j] = streamData
 				if bulkMode == "Y" {
 					allTracksData = append(allTracksData, streamData)
@@ -762,18 +870,51 @@ func main() {
 	} else {
 		for _, track := range allTracks {
 			currentStreams := totalPlays
-			data := make([]map[string]interface{}, currentStreams)
+			data := make([]StreamHistoryItem, currentStreams)
+
+			countryCode := randCountryCode()
+			ipAddress := generateRandomIP(countryCode)
+			platform := platforms[rand.Intn(len(platforms))]
 
 			for i := 0; i < currentStreams; i++ {
 				ts := generateRandomTimestamp(minDate, maxDate)
-				streamData := map[string]interface{}{
-					"ts":                                ts,
-					"ms_played":                         track.Duration,
-					"master_metadata_track_name":        track.Name,
-					"master_metadata_album_artist_name": track.Artists[0].Name,
-					"master_metadata_album_album_name":  track.Album.Name,
-					"spotify_track_uri":                 "spotify:track:" + track.ID,
+				reasonStart := reasonStarts[rand.Intn(len(reasonStarts))]
+				reasonEnd := reasonEnds[rand.Intn(len(reasonEnds))]
+				shuffle := rand.Intn(2) == 1
+				skipped := reasonEnd == "fwdbtn"
+				offline := rand.Intn(10) == 0
+
+				var offlineTs interface{} = nil
+				if offline {
+					offlineTs = ts
 				}
+
+				streamData := StreamHistoryItem{
+					TS:                        ts,
+					Platform:                  platform,
+					MSPlayed:                  track.Duration,
+					ConnCountry:               countryCode,
+					IPAddr:                    ipAddress,
+					MasterMetadataTrackName:   track.Name,
+					MasterMetadataAlbumArtist: track.Artists[0].Name,
+					MasterMetadataAlbumName:   track.Album.Name,
+					SpotifyTrackURI:           "spotify:track:" + track.ID,
+					EpisodeName:               nil,
+					EpisodeShowName:           nil,
+					SpotifyEpisodeURI:         nil,
+					AudiobookTitle:            nil,
+					AudiobookURI:              nil,
+					AudiobookChapterURI:       nil,
+					AudiobookChapterTitle:     nil,
+					ReasonStart:               reasonStart,
+					ReasonEnd:                 reasonEnd,
+					Shuffle:                   shuffle,
+					Skipped:                   skipped,
+					Offline:                   offline,
+					OfflineTimestamp:          offlineTs,
+					IncognitoMode:             false,
+				}
+
 				data[i] = streamData
 				if bulkMode == "Y" {
 					allTracksData = append(allTracksData, streamData)
@@ -804,5 +945,12 @@ func main() {
 		}
 	}
 
-	// join discord.gg/fuckstats
+}
+
+func randCountryCode() string {
+	countryList := make([]string, 0, len(countryCodes))
+	for code := range countryCodes {
+		countryList = append(countryList, code)
+	}
+	return countryList[rand.Intn(len(countryList))]
 }
