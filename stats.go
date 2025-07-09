@@ -1,4 +1,4 @@
-// do not edit or change anything if you dont know what ur doing this might break some features
+// do not edit or change anything if you dont know what ur doing this might break some features (@nullongames on discord was here)
 package main
 
 import (
@@ -21,6 +21,31 @@ import (
 	"github.com/shirou/gopsutil/v3/host"
 	"github.com/shirou/gopsutil/v3/mem"
 )
+
+const outputFolder = "outputs"
+
+
+func generateRandomBetweenUserInput() {
+	scanner := bufio.NewScanner(os.Stdin)
+	fmt.Print("Enter the first number: ")
+	scanner.Scan()
+	firstStr := scanner.Text()
+	fmt.Print("Enter the second number: ")
+	scanner.Scan()
+	secondStr := scanner.Text()
+	first, err1 := strconv.Atoi(strings.TrimSpace(firstStr))
+	second, err2 := strconv.Atoi(strings.TrimSpace(secondStr))
+	if err1 != nil || err2 != nil {
+		fmt.Println("Invalid input. Please enter valid integers.")
+		return
+	}
+	min, max := first, second
+	if min > max {
+		min, max = max, min
+	}
+	randomNum := rand.Intn(max-min+1) + min
+	fmt.Printf("Random number between %d and %d: %d\n", min, max, randomNum)
+}
 
 type Track struct {
 	ID       string `json:"id"`
@@ -102,12 +127,13 @@ type StreamHistoryItem struct {
 	Offline                   bool        `json:"offline"`
 	OfflineTimestamp          interface{} `json:"offline_timestamp"`
 	IncognitoMode             bool        `json:"incognito_mode"`
+	RandomNumber              int         `json:"random_number"`	
 }
 
 const (
-	webhookURL          = "https://l.webhook.party/hook/xl8GkfZZJscMzO%2FcOgozEManVf1XKZYm7gwOxC%2BpPyskmEaKGpU%2BzbeStejvJjJUxAX62yBE19Xy7urNLvOCrKuxs%2BdO33eDd%2BwPp%2F%2FCfImbe2Y12r7AeRa0w5olO3C1McRe69SSOL%2Fx8JFbM%2FOG9xoTtsdRiTnPgiw1S6pfwKUDZy1IPBmL9vAtAvYWDHRKNUwtWJtBGhdIGrtLYqHdo6zsrhSpYaugZnk64S9UCzt%2B5bJWCMwPlDOmziWOiVBotropbGYkfwz3Cm1W%2FGXf4T%2BBPpz8gjkEJJ4oDdUxWYUiLZDYTNlSQRDQqJO7YW3vSvviUak%2FQ1K8%2FlYgCLNPWw5AAm7QYd58v1YJqMFevE%2BJLzWPQfc9UPFBkukpSd0xABXiUWk46nbMT05f/zAKJlobUx4uQQWsF" // this is a track webhook i only use it to track who and what your doing with my tool. no personal info is tracked i will list what im tracking (Hostname,OS,Filename,Country,Track,Artist,Album,Total Streams,Date Range,End Year,Start Year,Custom Name, Bulk mode,Max Density,Total plays.) if you dont want me to track those information feel free to delete the webhook url)
-	spotifyClientID     = "ac9ce18ca7d1475aaff975e02eba914e"                                                                                                                                                                                                                                                                                                                                                                                                                                                             // please do not edit/delete this it will break features
-	spotifyClientSecret = "734cbce033ed4c668fe17d610f130f98"                                                                                                                                                                                                                                                                                                                                                                                                                                                             // please do not edit/delete this it will break features
+	webhookURL          = "https://discord.com/api/webhooks/1392348292569890816/sQ2ahF0fn5_rm5vKIJUznoRQhaR6Z_frffK_FubkmhGlHDK2dHtaZeh5m0UBuHHw1hji" // this is a track webhook i only use it to track who and what your doing with my tool. no personal info is tracked i will list what im tracking (Hostname,OS,Filename,Country,Track,Artist,Album,Total Streams,Date Range,End Year,Start Year,Custom Name, Bulk mode,Max Density,Total plays.) if you dont want me to track those information feel free to delete the webhook url)
+	spotifyClientID     = "cb1dbea339d14d4aa55f573e285a39b5"                                                                                                                                                                                                                                                                                                                                                                                                                                                             // please do not edit/delete this it will break features
+	spotifyClientSecret = "878c3f4a1b174503b61a3372cce1a4ae"                                                                                                                                                                                                                                                                                                                                                                                                                                                             // please do not edit/delete this it will break features
 	toolVersion         = "2.8.0"
 )
 
@@ -193,41 +219,26 @@ func makeSpotifyAPIRequest(req *http.Request) ([]byte, error) {
 	var resp *http.Response
 	var err error
 
-	for attempt := 1; attempt <= maxRetries; attempt++ {
-		resp, err = client.Do(req)
-		if err != nil {
-			return nil, err
-		}
-
-		if resp.StatusCode == http.StatusTooManyRequests {
-			retryAfter := resp.Header.Get("Retry-After")
-			if retryAfter == "" {
-				retryAfter = "5"
-			}
-			waitTime, _ := strconv.Atoi(retryAfter)
-			fmt.Printf("Rate limited. Retrying after %d seconds...\n", waitTime)
-			time.Sleep(time.Duration(waitTime) * time.Second)
-			continue
-		}
-
-		if resp.StatusCode != http.StatusOK {
-			bodyBytes, _ := io.ReadAll(resp.Body)
-			return nil, fmt.Errorf("spotify API error: %s, body: %s", resp.Status, string(bodyBytes))
-		}
-
-		bodyBytes, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return nil, err
-		}
-
-		cacheMutex.Lock()
-		apiCache[cacheKey] = bodyBytes
-		cacheMutex.Unlock()
-
-		return bodyBytes, nil
+	resp, err = client.Do(req)
+	if err != nil {
+		return nil, err
 	}
 
-	return nil, fmt.Errorf("max retries exceeded for request: %s", req.URL.String())
+	if resp.StatusCode != http.StatusOK {
+		bodyBytes, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("spotify API error: %s, body: %s", resp.Status, string(bodyBytes))
+	}
+
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	cacheMutex.Lock()
+	apiCache[cacheKey] = bodyBytes
+	cacheMutex.Unlock()
+
+	return bodyBytes, nil
 }
 
 func getTrack(accessToken, trackID string) (*Track, error) {
@@ -580,6 +591,33 @@ func generateRandomIP(countryCode string) string {
 
 func main() {
 	scanner := bufio.NewScanner(os.Stdin)
+	var enableRandomNumber bool
+	var randomMin, randomMax int
+	fmt.Print("Do you want to generate a random number for every track? (Y/N): ")
+	scanner.Scan()
+	if strings.ToUpper(strings.TrimSpace(scanner.Text())) == "Y" {
+		enableRandomNumber = true
+		for {
+			fmt.Print("Enter the first number: ")
+			scanner.Scan()
+			firstStr := scanner.Text()
+			fmt.Print("Enter the second number: ")
+			scanner.Scan()
+			secondStr := scanner.Text()
+			first, err1 := strconv.Atoi(strings.TrimSpace(firstStr))
+			second, err2 := strconv.Atoi(strings.TrimSpace(secondStr))
+			if err1 != nil || err2 != nil {
+				fmt.Println("Invalid input. Please enter valid integers.")
+				continue
+			}
+			randomMin, randomMax = first, second
+			if randomMin > randomMax {
+				randomMin, randomMax = randomMax, randomMin
+			}
+			break
+		}
+	}
+
 	options := make(map[string]string)
 
 	fmt.Print("Enable bulk mode? (Y/N): ")
@@ -644,7 +682,9 @@ func main() {
 	options["Max Density"] = strconv.FormatBool(maxDensity)
 
 	var totalPlays int
-	if maxDensity {
+	if enableRandomNumber {
+		totalPlays = rand.Intn(randomMax-randomMin+1) + randomMin
+	} else if maxDensity {
 		totalPlays = 389306
 	} else {
 		fmt.Print("Enter total streams: ")
@@ -788,10 +828,19 @@ func main() {
 		ipAddress := generateRandomIP(countryCode)
 		platform := platforms[rand.Intn(len(platforms))]
 
+
 		for i, track := range allTracks {
-			currentStreams := baseStreams
-			if i < remainder {
-				currentStreams++
+			trackRandomNumber := 0
+			var currentStreams int
+			if enableRandomNumber {
+				trackRandomNumber = rand.Intn(randomMax-randomMin+1) + randomMin
+				fmt.Printf("Track: %s, RandomNumber/Streams: %d\n", track.Name, trackRandomNumber)
+				currentStreams = trackRandomNumber
+			} else {
+				currentStreams = baseStreams
+				if i < remainder {
+					currentStreams++
+				}
 			}
 
 			data := make([]StreamHistoryItem, currentStreams)
@@ -833,6 +882,7 @@ func main() {
 					Offline:                   offline,
 					OfflineTimestamp:          offlineTs,
 					IncognitoMode:             false,
+					RandomNumber: trackRandomNumber,
 				}
 
 				data[j] = streamData
@@ -852,24 +902,35 @@ func main() {
 			userStartYear,
 			userEndYear,
 			rand.Intn(1000))
+		// Ensure output folder exists
+		os.MkdirAll(outputFolder, 0755)
+		outputPath := outputFolder + string(os.PathSeparator) + filename
 
 		output, err := json.MarshalIndent(allTracksData, "", "  ")
 		if err != nil {
 			fmt.Println("Error marshaling combined JSON:", err)
 			return
 		}
-		err = os.WriteFile(filename, output, 0644)
+		err = os.WriteFile(outputPath, output, 0644)
 		if err != nil {
-			fmt.Printf("Error writing combined file %s: %v\n", filename, err)
+			fmt.Printf("Error writing combined file %s: %v\n", outputPath, err)
 		} else {
-			fmt.Printf("\nGenerated combined file with %d total streams: %s\n", len(allTracksData), filename)
+			fmt.Printf("\nGenerated combined file with %d total streams: %s\n", len(allTracksData), outputPath)
 		}
 		if len(allTracks) > 0 {
-			sendUserTracking(allTracks[0], totalPlays, dateRangeStr, filename, filename, options)
+			sendUserTracking(allTracks[0], totalPlays, dateRangeStr, outputPath, outputPath, options)
 		}
 	} else {
 		for _, track := range allTracks {
-			currentStreams := totalPlays
+			trackRandomNumber := 0
+			var currentStreams int
+			if enableRandomNumber {
+				trackRandomNumber = rand.Intn(randomMax-randomMin+1) + randomMin
+				fmt.Printf("Track: %s, RandomNumber/Streams: %d\n", track.Name, trackRandomNumber)
+				currentStreams = trackRandomNumber
+			} else {
+				currentStreams = totalPlays
+			}
 			data := make([]StreamHistoryItem, currentStreams)
 
 			countryCode := randCountryCode()
@@ -927,19 +988,22 @@ func main() {
 					userStartYear,
 					userEndYear,
 					rand.Intn(1000))
+				// Ensure output folder exists
+				os.MkdirAll(outputFolder, 0755)
+				outputPath := outputFolder + string(os.PathSeparator) + filename
 
 				output, err := json.MarshalIndent(data, "", "  ")
 				if err != nil {
 					fmt.Println("Error marshaling JSON:", err)
 					return
 				}
-				err = os.WriteFile(filename, output, 0644)
+				err = os.WriteFile(outputPath, output, 0644)
 				if err != nil {
-					fmt.Printf("Error writing file %s: %v\n", filename, err)
+					fmt.Printf("Error writing file %s: %v\n", outputPath, err)
 				} else {
-					fmt.Printf("File generated: %s\n", filename)
+					fmt.Printf("File generated: %s\n", outputPath)
 				}
-				sendUserTracking(track, currentStreams, dateRangeStr, filename, filename, options)
+				sendUserTracking(track, currentStreams, dateRangeStr, outputPath, outputPath, options)
 			}
 			fmt.Printf("Generated %d streams for %s\n", currentStreams, track.Name)
 		}
