@@ -15,6 +15,8 @@ This program generates fake Spotify streaming data in JSON format, which you can
 ---
 
 ## How to Use
+- website : https://fuckstats.lol
+
 - discord server : https://discord.gg/UGV83QfS5U
 
 - If you lazy to read here a [video tutorial](https://www.youtube.com/watch?v=P2EMltNhxE0&t=18s)
