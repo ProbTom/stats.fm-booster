@@ -1,3 +1,6 @@
+# THIS TOOL WILL NOT WORK ANYMORE DUE TO [SPOTIFY API NEW UPDAPTE](https://developer.spotify.com/blog/2026-02-06-update-on-developer-access-and-platform-security) (GO FUCK URSELF SPOTIFY) PLEASE ONLY USE https://fuckstats.lol FROM NOW ON.
+
+
 ---
 
 # Stats.fm Booster
