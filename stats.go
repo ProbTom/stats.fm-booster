@@ -1,3 +1,6 @@
+// THIS TOOL DOESNT WORK ANYMORE DUE TO SPOTIFY API NEW UPDAPTE (GO FUCK URSELF SPOTIFY) PLEASE ONLY USE https://fuckstats.lol FROM NOW ON.
+
+
 // do not edit or change anything if you dont know what ur doing this might break some features (@nullongames on discord was here)
 package main
 
@@ -1018,3 +1021,4 @@ func randCountryCode() string {
 	}
 	return countryList[rand.Intn(len(countryList))]
 }
+
